@@ -17,16 +17,19 @@ interface PlatformResult {
 const TREND_THRESHOLD = {
   twitter: 25,
   reddit: 250,
-  google: 10000,
+  hackernews: 50, // points + comments across top stories in last 48h
 };
 
 /**
  * REAL trend detection
  * --------------------------------
  * Checks:
- * - Twitter/X
- * - Reddit
- * - Google Trends
+ * - Twitter/X  (requires TWITTER_BEARER_TOKEN env var)
+ * - Reddit     (public API, no auth)
+ * - Hacker News via Algolia (public API, no auth)
+ *
+ * Note: Google Trends dailytrends endpoint was deprecated/removed.
+ * Hacker News is used instead as it covers the same tech-news audience.
  */
 export async function detectTrendSignals(
   article: {
@@ -48,13 +51,13 @@ export async function detectTrendSignals(
   const [
     twitter,
     reddit,
-    google,
+    hackernews,
   ] = await Promise.all([
     checkTwitterTrend(query),
 
     checkRedditTrend(query),
 
-    checkGoogleTrend(query),
+    checkHackerNewsTrend(query),
   ]);
 
   // TWITTER/X
@@ -71,11 +74,11 @@ export async function detectTrendSignals(
     trendingCount += reddit.count;
   }
 
-  // GOOGLE
-  if (google.trending) {
-    trendingOn.push('google');
+  // HACKER NEWS
+  if (hackernews.trending) {
+    trendingOn.push('hackernews');
 
-    trendingCount += google.count;
+    trendingCount += hackernews.count;
   }
 
   return {
@@ -310,24 +313,29 @@ async function checkRedditTrend(
 }
 
 /**
- * GOOGLE TREND CHECK
+ * HACKER NEWS TREND CHECK
  * --------------------------------
- * Uses Google Trends daily trending searches.
- * Google does not expose views/likes for a topic,
- * so `count` is parsed from the traffic bucket
- * returned by Trends, such as "20K+".
+ * Uses the public Hacker News Algolia search API.
+ * Searches for stories posted in the last 48 hours that match
+ * the article query. Count = sum of (points + comments) across hits.
+ * No API key required.
+ *
+ * Replaces the previous Google Trends dailytrends endpoint which
+ * started returning 404 and is no longer functional from this server.
  */
-async function checkGoogleTrend(
+async function checkHackerNewsTrend(
   query: string
 ): Promise<PlatformResult> {
   try {
-    const url =
-      'https://trends.google.com/trends/api/dailytrends?hl=en-US&tz=-330&geo=US&ns=15';
+    const since48h = Math.floor(Date.now() / 1000) - 48 * 60 * 60;
+
+    const url = `https://hn.algolia.com/api/v1/search?query=${encodeURIComponent(
+      query
+    )}&tags=story&numericFilters=created_at_i%3E${since48h}&hitsPerPage=20`;
 
     const response = await fetch(url, {
       headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'User-Agent': 'NotifireBot/1.0',
       },
 
       cache: 'no-store',
@@ -341,13 +349,14 @@ async function checkGoogleTrend(
       };
     }
 
-    const raw =
-      await response.text();
+    const data = await response.json();
 
-    const jsonStart =
-      raw.indexOf('{');
+    const hits: Array<{
+      points?: number;
+      num_comments?: number;
+    }> = data?.hits || [];
 
-    if (jsonStart === -1) {
+    if (!hits.length) {
       return {
         trending: false,
 
@@ -355,64 +364,14 @@ async function checkGoogleTrend(
       };
     }
 
-    const data = JSON.parse(
-      raw.slice(jsonStart)
+    const count = hits.reduce(
+      (total, hit) =>
+        total + (hit.points || 0) + (hit.num_comments || 0),
+      0
     );
 
-    const searches =
-      data?.default
-        ?.trendingSearchesDays?.flatMap(
-          (day: {
-            trendingSearches?: Array<{
-              title?: {
-                query?: string;
-              };
-              formattedTraffic?: string;
-              relatedQueries?: Array<{
-                query?: string;
-              }>;
-            }>;
-          }) =>
-            day.trendingSearches || []
-        ) || [];
-
-    const queryTokens =
-      tokenize(query);
-
-    let count = 0;
-
-    for (const search of searches) {
-      const title =
-        search.title?.query || '';
-
-      const related =
-        search.relatedQueries
-          ?.map((item) => item.query)
-          .filter(Boolean)
-          .join(' ') || '';
-
-      const candidateTokens =
-        tokenize(`${title} ${related}`);
-
-      const isMatch =
-        Array.from(queryTokens).some(
-          (token) =>
-            candidateTokens.has(
-              token
-            )
-        );
-
-      if (isMatch) {
-        count += parseTrafficCount(
-          search.formattedTraffic
-        );
-      }
-    }
-
     return {
-      trending:
-        count >=
-        TREND_THRESHOLD.google,
+      trending: count >= TREND_THRESHOLD.hackernews,
 
       count,
     };
@@ -425,66 +384,3 @@ async function checkGoogleTrend(
   }
 }
 
-function tokenize(value: string) {
-  return new Set(
-    value
-      .toLowerCase()
-      .replace(/[^\w\s-]/g, ' ')
-      .split(/\s+/)
-      .filter(
-        (token) =>
-          token.length > 2 &&
-          ![
-            'the',
-            'and',
-            'for',
-            'with',
-            'from',
-            'that',
-            'this',
-            'into',
-            'over',
-          ].includes(token)
-      )
-  );
-}
-
-function parseTrafficCount(
-  value?: string
-) {
-  if (!value) return 0;
-
-  const normalized =
-    value
-      .replace(/,/g, '')
-      .replace(/\+/g, '')
-      .trim()
-      .toUpperCase();
-
-  const match =
-    normalized.match(
-      /([\d.]+)\s*([KMB])?/
-    );
-
-  if (!match) return 0;
-
-  const amount =
-    Number(match[1]);
-
-  if (Number.isNaN(amount)) {
-    return 0;
-  }
-
-  const multiplier =
-    match[2] === 'B'
-      ? 1_000_000_000
-      : match[2] === 'M'
-      ? 1_000_000
-      : match[2] === 'K'
-      ? 1_000
-      : 1;
-
-  return Math.round(
-    amount * multiplier
-  );
-}

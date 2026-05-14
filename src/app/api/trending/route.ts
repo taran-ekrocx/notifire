@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { fetchAllSources } from '@/lib/fetchers/aggregator';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const articles = await fetchAllSources('all', true);
