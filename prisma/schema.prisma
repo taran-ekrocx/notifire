@@ -1,0 +1,98 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Article {
+  id            String   @id @default(cuid())
+
+  title         String
+  url           String   @unique
+
+  description   String   @default("")
+
+  imageUrl      String?
+  aiImageUrl    String?
+
+  source        String   @default("")
+  author        String?
+
+  publishedAt   DateTime
+
+  category      String   @default("ai")
+
+  tags          String   @default("[]")
+
+  content       String?
+
+  summary       String?
+
+  keyPoints     String   @default("[]")
+
+
+  readTimeMin   Int      @default(3)
+
+  sentiment     String   @default("neutral")
+
+  scrapedAt     DateTime?
+
+  summarizedAt  DateTime?
+
+  // ─────────────────────────────
+  // TRENDING + AUTHORIZATION
+  // ─────────────────────────────
+
+  isTrending            Boolean @default(false)
+
+  // JSON string:
+  // ["Google","Twitter/X","Reddit"]
+  trendingOn            String  @default("[]")
+
+  // total discussions / mentions
+  trendingCount         Int     @default(0)
+
+  // verified from original source?
+  authorized            Boolean @default(false)
+
+  // OpenAI / Google / Microsoft etc.
+  officialSourceName    String?
+
+  // https://openai.com/blog
+  officialSourceUrl     String?
+
+  createdAt             DateTime @default(now())
+
+  updatedAt             DateTime @updatedAt
+
+  saved                 SavedArticle[]
+
+  @@index([category])
+
+  @@index([publishedAt])
+
+
+  @@index([isTrending])
+
+  @@index([authorized])
+}
+
+model SavedArticle {
+  id        String   @id @default(cuid())
+  articleId String
+  article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model ScrapeJob {
+  id        String   @id @default(cuid())
+  url       String
+  status    String   @default("pending") // pending, running, done, failed
+  result    String?  // JSON result stored as string
+  error     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
