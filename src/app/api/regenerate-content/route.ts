@@ -6,6 +6,7 @@ import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import { getDb } from '@/lib/db';
 import { getGeminiApiKey } from '@/lib/ai/geminiKey';
+import { scrapeArticle } from '@/lib/fetchers/scrapeArticle';
 
 async function buildGeminiUrl(model: string): Promise<string> {
   const key = await getGeminiApiKey();
@@ -73,23 +74,6 @@ async function saveImageToDisk(buf: Buffer, articleId: string): Promise<string> 
   return `/generated/${filename}`;
 }
 
-async function scrapeUrl(url: string): Promise<string | null> {
-  try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-      cache: 'no-store',
-    });
-    if (!res.ok) return null;
-    const html = await res.text();
-    const { load } = await import('cheerio');
-    const $ = load(html);
-    const paragraphs = $('p').map((_, el) => $(el).text().trim()).get().filter(Boolean);
-    return paragraphs.join('\n\n').slice(0, 15000) || null;
-  } catch {
-    return null;
-  }
-}
-
 // GET — return existing regeneration data for an article
 export async function GET(req: NextRequest) {
   const articleId = req.nextUrl.searchParams.get('articleId');
@@ -124,7 +108,10 @@ export async function POST(req: NextRequest) {
         rawContent = dbArticle?.content || null;
       } catch { /* ignore */ }
     }
-    if (!rawContent) rawContent = await scrapeUrl(url);
+    if (!rawContent) {
+      const scraped = await scrapeArticle(url);
+      rawContent = scraped.success ? scraped.content || null : null;
+    }
     if (!rawContent) {
       return NextResponse.json({ error: 'Could not fetch article content to regenerate from' }, { status: 422 });
     }

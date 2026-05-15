@@ -5,68 +5,8 @@ import {
   NextResponse,
 } from 'next/server';
 
-import * as cheerio from 'cheerio';
-
 import { getDb } from '@/lib/db';
-
-async function scrapeUrl(url: string) {
-  try {
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      },
-
-      cache: 'no-store',
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        `Failed with status ${response.status}`
-      );
-    }
-
-    const html = await response.text();
-
-    const $ = cheerio.load(html);
-
-    const title =
-      $('title').text() ||
-      $('h1').first().text() ||
-      'Untitled Article';
-
-    const paragraphs = $('p')
-      .map((_, el) =>
-        $(el).text().trim()
-      )
-      .get()
-      .filter(Boolean);
-
-    const content = paragraphs
-      .join('\n\n')
-      .slice(0, 15000);
-
-    return {
-      success: true,
-      title,
-      content,
-    };
-  } catch (error) {
-    console.error(
-      '[Scrape]',
-      error
-    );
-
-    return {
-      success: false,
-
-      error:
-        error instanceof Error
-          ? error.message
-          : 'Scraping failed',
-    };
-  }
-}
+import { scrapeArticle } from '@/lib/fetchers/scrapeArticle';
 
 export async function POST(
   req: NextRequest
@@ -87,7 +27,7 @@ export async function POST(
       );
     }
 
-    const result = await scrapeUrl(
+    const result = await scrapeArticle(
       body.url
     );
 
