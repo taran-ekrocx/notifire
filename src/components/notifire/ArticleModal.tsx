@@ -42,16 +42,31 @@ export function ArticleModal({ article, open, onOpenChange }: ArticleModalProps)
   const [scrapeContent, setScrapeContent] = useState<string | null>(null);
   const [scrapeLoading, setScrapeLoading] = useState(false);
   const [aiImageUrl, setAiImageUrl] = useState<string | null>(null);
+  const [regenImageUrl, setRegenImageUrl] = useState<string | null>(null);
   const [regenerating, setRegenerating] = useState(false);
 
   useEffect(() => {
     if (!article || !open) {
       setScrapeContent(null);
       setAiImageUrl(null);
+      setRegenImageUrl(null);
       setActiveTab('rss-data');
       return;
     }
     setAiImageUrl(article.aiImageUrl || null);
+
+    // Load any previously regenerated content for this article
+    if (article.id) {
+      fetch(`/api/regenerate-content?articleId=${encodeURIComponent(article.id)}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.found) {
+            if (data.content) setScrapeContent(data.content);
+            if (data.imageUrl) setRegenImageUrl(data.imageUrl);
+          }
+        })
+        .catch(() => { /* silent */ });
+    }
   }, [article, open]);
 
   const loadContent = useCallback(async () => {
@@ -97,7 +112,7 @@ export function ArticleModal({ article, open, onOpenChange }: ArticleModalProps)
       if (!res.ok) throw new Error('Regeneration failed');
       const data = await res.json();
       if (data.content) setScrapeContent(data.content);
-      if (data.imageUrl) setAiImageUrl(data.imageUrl);
+      if (data.imageUrl) setRegenImageUrl(data.imageUrl);
     } catch {
       // silently fail
     } finally {
@@ -110,6 +125,7 @@ export function ArticleModal({ article, open, onOpenChange }: ArticleModalProps)
   const meta = CATEGORY_META[article.category];
   const displayImage = aiImageUrl || article.aiImageUrl || article.imageUrl;
   const fullContent = scrapeContent || article.content || null;
+  const regenImage = regenImageUrl;
 
   const trendingPlatforms: string[] = [];
   if (article.isTrending && article.trendSignals) {
@@ -483,6 +499,33 @@ export function ArticleModal({ article, open, onOpenChange }: ArticleModalProps)
 
                 {/* Title */}
                 <h1 className="text-2xl font-bold leading-snug">{article.title}</h1>
+
+                {/* Regenerated AI Image — 275×183 px */}
+                {regenImage && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.97 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.3 }}
+                    className="flex flex-col gap-1.5"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="size-4 text-violet-500" />
+                      <h4 className="text-sm font-semibold">AI Generated Image</h4>
+                      <Badge variant="secondary" className="text-[10px] font-semibold gap-1 border-0 bg-violet-500/10 text-violet-500">
+                        Gemini
+                      </Badge>
+                    </div>
+                    <div className="relative overflow-hidden rounded-lg border border-border/30" style={{ width: 275, height: 183 }}>
+                      <Image
+                        src={regenImage}
+                        alt={`AI generated image for: ${article.title}`}
+                        fill
+                        className="object-cover"
+                        sizes="275px"
+                      />
+                    </div>
+                  </motion.div>
+                )}
 
                 {/* Article Content */}
                 <div className="space-y-3">
