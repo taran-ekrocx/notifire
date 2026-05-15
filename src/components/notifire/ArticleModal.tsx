@@ -38,7 +38,7 @@ interface ArticleModalProps {
 }
 
 export function ArticleModal({ article, open, onOpenChange }: ArticleModalProps) {
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('rss-data');
   const [scrapeContent, setScrapeContent] = useState<string | null>(null);
   const [scrapeLoading, setScrapeLoading] = useState(false);
   const [aiImageUrl, setAiImageUrl] = useState<string | null>(null);
@@ -48,7 +48,7 @@ export function ArticleModal({ article, open, onOpenChange }: ArticleModalProps)
     if (!article || !open) {
       setScrapeContent(null);
       setAiImageUrl(null);
-      setActiveTab('overview');
+      setActiveTab('rss-data');
       return;
     }
     setAiImageUrl(article.aiImageUrl || null);
@@ -75,7 +75,7 @@ export function ArticleModal({ article, open, onOpenChange }: ArticleModalProps)
 
   const handleTabChange = useCallback((tab: string) => {
     setActiveTab(tab);
-    if (tab === 'content') loadContent();
+    if (tab === 'scraped-data') loadContent();
   }, [loadContent]);
 
   const handleRegenerateContent = useCallback(async () => {
@@ -143,14 +143,14 @@ export function ArticleModal({ article, open, onOpenChange }: ArticleModalProps)
             </Badge>
             <span className="text-sm font-semibold truncate flex-1 min-w-0">{article.title}</span>
             <TabsList className="shrink-0">
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="content">Content</TabsTrigger>
+              <TabsTrigger value="rss-data">RSS Data</TabsTrigger>
+              <TabsTrigger value="scraped-data">Scraped Data</TabsTrigger>
             </TabsList>
           </div>
 
-          {/* ── Overview Tab ── */}
+          {/* ── RSS Data Tab ── */}
           <TabsContent
-            value="overview"
+            value="rss-data"
             className="flex-1 overflow-y-auto outline-none m-0"
           >
             <div className="p-6 max-w-4xl mx-auto space-y-6 pb-12">
@@ -440,9 +440,9 @@ export function ArticleModal({ article, open, onOpenChange }: ArticleModalProps)
             </div>
           </TabsContent>
 
-          {/* ── Content Tab ── */}
+          {/* ── Scraped Data Tab ── */}
           <TabsContent
-            value="content"
+            value="scraped-data"
             className="flex-1 overflow-y-auto outline-none m-0"
           >
             <div className="p-6 max-w-4xl mx-auto space-y-6 pb-12">
