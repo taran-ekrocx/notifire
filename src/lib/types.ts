@@ -62,6 +62,11 @@ authorized?: boolean;
 officialSourceName?: string;
 
 officialSourceUrl?: string;
+
+  authConfidence?: number;
+  authCheckedAt?: string;
+  authFlags?: string[];
+  authReasoning?: string;
   readTimeMin?: number;
   sentiment?: 'positive' | 'neutral' | 'negative';
   scrapedAt?: string;

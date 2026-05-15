@@ -422,6 +422,20 @@ async function persistArticles(
             officialSourceUrl:
               article.officialSourceUrl,
 
+            authConfidence:
+              article.authConfidence ?? null,
+
+            authCheckedAt:
+              article.authCheckedAt
+                ? new Date(article.authCheckedAt)
+                : null,
+
+            authFlags:
+              JSON.stringify(article.authFlags || []),
+
+            authReasoning:
+              article.authReasoning ?? null,
+
             scrapedAt:
               article.scrapedAt
                 ? new Date(
@@ -464,7 +478,7 @@ async function persistArticles(
                   {}
               ),
 
-            // AUTHORIZATION
+            // GEMINI AI AUTHORIZATION
             authorized:
               article.authorized ||
               false,
@@ -474,6 +488,20 @@ async function persistArticles(
 
             officialSourceUrl:
               article.officialSourceUrl,
+
+            authConfidence:
+              article.authConfidence ?? null,
+
+            authCheckedAt:
+              article.authCheckedAt
+                ? new Date(article.authCheckedAt)
+                : null,
+
+            authFlags:
+              JSON.stringify(article.authFlags || []),
+
+            authReasoning:
+              article.authReasoning ?? null,
 
             scrapedAt:
               article.scrapedAt

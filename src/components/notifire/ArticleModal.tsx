@@ -21,6 +21,10 @@ import {
   Globe,
   RefreshCw,
   FileText,
+  ShieldCheck,
+  ShieldX,
+  AlertTriangle,
+  Info,
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
@@ -353,6 +357,83 @@ export function ArticleModal({ article, open, onOpenChange }: ArticleModalProps)
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Flame className="size-4 opacity-40" />
                     <span>Not currently trending on any platform.</span>
+                  </div>
+                )}
+
+                {/* Source Authentication */}
+                {article.authCheckedAt && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      {article.authorized ? (
+                        <ShieldCheck className="size-4 text-emerald-500" />
+                      ) : (
+                        <ShieldX className="size-4 text-red-500" />
+                      )}
+                      <span className="text-sm font-semibold">Source Authentication</span>
+                      <Badge
+                        variant="secondary"
+                        className={`text-[10px] border-0 ${
+                          article.authorized
+                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                            : 'bg-red-500/10 text-red-600 dark:text-red-400'
+                        }`}
+                      >
+                        {article.authorized ? 'Authorized' : 'Unauthorized'}
+                      </Badge>
+                      {typeof article.authConfidence === 'number' && (
+                        <span className="text-xs text-muted-foreground ml-auto">
+                          {Math.round(article.authConfidence * 100)}% confidence
+                        </span>
+                      )}
+                    </div>
+
+                    <div className={`rounded-lg border p-4 space-y-3 ${
+                      article.authorized
+                        ? 'bg-emerald-500/5 border-emerald-500/20'
+                        : 'bg-red-500/5 border-red-500/20'
+                    }`}>
+                      {article.officialSourceName && (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Info className="size-3.5 shrink-0" />
+                          <span>
+                            <span className="font-medium text-foreground">Official source: </span>
+                            {article.officialSourceName}
+                          </span>
+                        </div>
+                      )}
+                      {article.officialSourceUrl && (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Globe className="size-3.5 shrink-0" />
+                          <a
+                            href={article.officialSourceUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-500 underline underline-offset-2 truncate hover:text-blue-400"
+                          >
+                            {article.officialSourceUrl}
+                          </a>
+                        </div>
+                      )}
+                      {(article.authFlags ?? []).length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {(article.authFlags ?? []).map((flag) => (
+                            <Badge
+                              key={flag}
+                              variant="secondary"
+                              className="text-[9px] px-1.5 py-0.5 h-auto gap-1 border-0 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                            >
+                              <AlertTriangle className="size-2.5" />
+                              {flag.replace(/-/g, ' ')}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                      {article.authReasoning && (
+                        <p className="text-xs text-muted-foreground italic leading-relaxed">
+                          {article.authReasoning}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 )}
 

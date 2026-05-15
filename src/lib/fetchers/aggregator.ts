@@ -1,6 +1,6 @@
 // lib/fetchers/aggregator.ts
 
-import { detectOfficialSource } from '../ai/detectOfficialSource';
+import { verifyArticleAuthenticity } from '../ai/geminiAuthVerification';
 
 import {
   Article,
@@ -29,6 +29,19 @@ export async function fetchAllSources(
         )
       ? [categoryParam as Category]
       : ALL_CATEGORIES;
+
+  // Build a map from article URL hostname → rss source base domain
+  const rssDomainByCategory: Record<string, string> = {};
+  for (const cat of targets) {
+    const sources = RSS_SOURCES[cat] ?? [];
+    if (sources.length > 0) {
+      try {
+        rssDomainByCategory[cat] = new URL(sources[0].url).hostname.replace(/^www\./, '');
+      } catch {
+        rssDomainByCategory[cat] = '';
+      }
+    }
+  }
 
   // FETCH RSS FEEDS
   const settled =
@@ -88,15 +101,20 @@ export async function fetchAllSources(
               );
 
             /**
-             * OFFICIAL SOURCE DETECTION
+             * GEMINI AI SOURCE AUTHENTICATION
              */
-            const official =
-              await detectOfficialSource(
-                article.title,
-                article.description ||
-                  '',
-                article.url
-              );
+            const sourceDomain = (() => {
+              try { return new URL(article.url).hostname.replace(/^www\./, ''); } catch { return ''; }
+            })();
+            const rssDomain = rssDomainByCategory[article.category] || sourceDomain;
+
+            const auth = await verifyArticleAuthenticity({
+              title: article.title,
+              content: article.content || article.description || '',
+              sourceDomain,
+              rssDomain,
+              category: article.category,
+            });
 
             const activePlatforms: SocialPlatform[] = [];
             if ((trendSignals.trendSignals.twitter?.tweet_count || 0) > 0) activePlatforms.push('twitter');
@@ -107,32 +125,19 @@ export async function fetchAllSources(
               ...article,
 
               // TRENDING
-              isTrending:
-                trendSignals.isTrending,
+              isTrending: trendSignals.isTrending,
+              trendSignals: trendSignals.trendSignals,
+              socialBoost: trendSignals.trendSignals.google?.google_trend_score || 0,
+              socialPlatforms: activePlatforms,
 
-              trendSignals:
-                trendSignals.trendSignals,
-
-              socialBoost:
-                trendSignals.trendSignals.google?.google_trend_score || 0,
-
-              socialPlatforms:
-                activePlatforms,
-
-              // AUTHORIZATION
-              authorized:
-                official.authorized,
-
-              officialSourceName:
-                official.officialSourceName ||
-                undefined,
-
-              officialSourceUrl:
-                official.officialSourceUrl ||
-                undefined,
-
-              officialReason:
-                official.reason,
+              // GEMINI AI AUTHORIZATION
+              authorized: auth.authorized,
+              officialSourceName: auth.officialSourceName || undefined,
+              officialSourceUrl: auth.originalSourceUrl || undefined,
+              authConfidence: auth.authConfidence,
+              authCheckedAt: new Date().toISOString(),
+              authFlags: auth.flags,
+              authReasoning: auth.reasoning,
             };
           }
         )
@@ -178,40 +183,36 @@ export async function fetchAllSources(
     return await Promise.all(
       deduped.map(
         async (article) => {
-          const official =
-            await detectOfficialSource(
-              article.title,
-              article.description ||
-                '',
-              article.url
-            );
+          const sourceDomain = (() => {
+            try { return new URL(article.url).hostname.replace(/^www\./, ''); } catch { return ''; }
+          })();
+          const rssDomain = rssDomainByCategory[article.category] || sourceDomain;
+
+          const auth = await verifyArticleAuthenticity({
+            title: article.title,
+            content: article.content || article.description || '',
+            sourceDomain,
+            rssDomain,
+            category: article.category,
+          });
 
           return {
             ...article,
 
             // TRENDING
             isTrending: false,
-
             trendSignals: EMPTY_TREND_SIGNALS,
-
             socialBoost: 0,
-
             socialPlatforms: [],
 
-            // AUTHORIZATION
-            authorized:
-              official.authorized,
-
-            officialSourceName:
-              official.officialSourceName ||
-              undefined,
-
-            officialSourceUrl:
-              official.officialSourceUrl ||
-              undefined,
-
-            officialReason:
-              official.reason,
+            // GEMINI AI AUTHORIZATION
+            authorized: auth.authorized,
+            officialSourceName: auth.officialSourceName || undefined,
+            officialSourceUrl: auth.originalSourceUrl || undefined,
+            authConfidence: auth.authConfidence,
+            authCheckedAt: new Date().toISOString(),
+            authFlags: auth.flags,
+            authReasoning: auth.reasoning,
           };
         }
       )
