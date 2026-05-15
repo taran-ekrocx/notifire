@@ -134,24 +134,15 @@ export async function GET(
           pubTime >= cutoff
         );
       })
-      .sort((a, b) => {
-        const trendDiff =
-          (b.trendingCount || 0) -
-          (a.trendingCount || 0);
-
-        if (trendDiff !== 0) {
-          return trendDiff;
-        }
-
-        return (
+      .sort(
+        (a, b) =>
           new Date(
             b.publishedAt
           ).getTime() -
           new Date(
             a.publishedAt
           ).getTime()
-        );
-      });
+      );
 
     // SCRAPE FULL ARTICLES
     const scrapedArticles =
