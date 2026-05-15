@@ -591,8 +591,12 @@ function purgeArticlesWithoutContent() {
           ],
         },
       });
-      if (result.count > 0) {
-        console.log(`[Cleanup] Purged ${result.count} incomplete article(s) missing title, description, or url.`);
+      const shortDeleted = await db.$executeRaw`
+        DELETE FROM "Article" WHERE char_length(description) < 30
+      `;
+      const total = result.count + (shortDeleted as number);
+      if (total > 0) {
+        console.log(`[Cleanup] Purged ${total} incomplete/stub article(s).`);
       }
     } catch (err) {
       console.warn('[Cleanup] Failed to purge thin articles:', err);

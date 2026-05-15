@@ -1,49 +1,80 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 
-/**
- * Incomplete article filter:
- * - title, description, or url is empty string (all are non-nullable in schema)
- * - OR both description and content are absent (no useful readable content)
- */
-const INCOMPLETE_WHERE = {
-  OR: [
-    { title: '' },
-    { description: '' },
-    { url: '' },
-    {
-      AND: [
-        { description: '' },
-        { OR: [{ content: null }, { content: '' }] },
-      ],
-    },
-  ],
-};
+const MIN_DESCRIPTION_LEN = 30;
 
 /**
- * POST: delete all incomplete articles.
+ * POST: delete all incomplete or stub articles:
+ * - empty title, description, or url
+ * - description shorter than MIN_DESCRIPTION_LEN (e.g. HN "Comments")
+ * - both description and content absent
  */
 export async function POST() {
   const db = await getDb();
 
-  const result = await db.article.deleteMany({ where: INCOMPLETE_WHERE });
+  // Prisma filter for structurally empty fields
+  const structural = await db.article.deleteMany({
+    where: {
+      OR: [
+        { title: '' },
+        { description: '' },
+        { url: '' },
+        {
+          AND: [
+            { description: '' },
+            { OR: [{ content: null }, { content: '' }] },
+          ],
+        },
+      ],
+    },
+  });
+
+  // Raw SQL for short descriptions that Prisma can't length-filter natively
+  const shortDescResult = await db.$executeRaw`
+    DELETE FROM "Article"
+    WHERE char_length(description) < ${MIN_DESCRIPTION_LEN}
+  `;
+
+  const total = structural.count + (shortDescResult as number);
 
   return NextResponse.json({
-    deleted: result.count,
-    message: `Removed ${result.count} incomplete article(s) (missing title, description, or url).`,
+    deleted: total,
+    message: `Removed ${total} incomplete article(s) (missing/stub title, description, or url).`,
   });
 }
 
 /**
- * GET: preview how many articles would be deleted.
+ * GET: preview count of articles that would be deleted.
  */
 export async function GET() {
   const db = await getDb();
 
-  const count = await db.article.count({ where: INCOMPLETE_WHERE });
+  const structural = await db.article.count({
+    where: {
+      OR: [
+        { title: '' },
+        { description: '' },
+        { url: '' },
+        {
+          AND: [
+            { description: '' },
+            { OR: [{ content: null }, { content: '' }] },
+          ],
+        },
+      ],
+    },
+  });
+
+  const shortDesc = await db.$queryRaw<[{ count: bigint }]>`
+    SELECT COUNT(*) as count FROM "Article"
+    WHERE char_length(description) < ${MIN_DESCRIPTION_LEN}
+  `;
+  const shortDescCount = Number(shortDesc[0].count);
+
+  const total = structural + shortDescCount;
 
   return NextResponse.json({
-    wouldDelete: count,
-    message: `${count} article(s) are incomplete (missing title, description, or url).`,
+    wouldDelete: total,
+    message: `${total} article(s) are incomplete or have stub descriptions (< ${MIN_DESCRIPTION_LEN} chars).`,
   });
 }

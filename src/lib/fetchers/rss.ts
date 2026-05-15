@@ -67,7 +67,9 @@ export async function fetchRSSFeeds(
       const title = (item.title ?? '').trim();
       const link = (item.link ?? '').trim();
       const description = (item.contentSnippet ?? item.summary ?? '').trim();
-      if (!title || !link || !description) continue;
+      // Require a meaningful description (≥30 chars). Filters out stub entries
+      // like HackerNews "Comments" descriptions that add no value.
+      if (!title || !link || description.length < 30) continue;
 
       // Filter: only include articles published within the last 24 hours
       const pubDate = new Date(item.isoDate ?? item.pubDate ?? '');

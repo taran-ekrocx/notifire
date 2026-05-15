@@ -16,11 +16,16 @@ export async function GET(request: NextRequest) {
       where: {
         publishedAt: { gte: cutoff },
         ...(category !== 'all' ? { category } : {}),
+        // Exclude stub entries (e.g. HN "Comments") with no meaningful description
+        NOT: { description: { in: [''] } },
       },
       orderBy: { publishedAt: 'desc' },
     });
 
-    const mapped: Article[] = articles.map((a) => ({
+    // Secondary in-memory guard: drop anything under 30 chars
+    const validArticles = articles.filter(a => a.description.length >= 30);
+
+    const mapped: Article[] = validArticles.map((a) => ({
       id: a.id,
       title: a.title,
       url: a.url,
