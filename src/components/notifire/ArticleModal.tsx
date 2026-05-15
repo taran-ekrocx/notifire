@@ -157,6 +157,31 @@ export function ArticleModal({ article, open, onOpenChange }: ArticleModalProps)
                   <p className="text-muted-foreground leading-relaxed">{article.description}</p>
                 </div>
 
+                {/* Image */}
+                {displayImage && (
+                  <div className="relative w-full h-72 rounded-xl overflow-hidden border border-border/30">
+                    <Image
+                      src={displayImage}
+                      alt={`Illustration for: ${article.title}`}
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 896px) 100vw, 896px"
+                      priority
+                    />
+                    {(aiImageUrl || article.aiImageUrl) && (
+                      <div className="absolute top-2 right-2">
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px] font-semibold gap-1 border-0 bg-black/60 text-white backdrop-blur-sm"
+                        >
+                          <Sparkles className="size-3" /> AI Generated
+                        </Badge>
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+                  </div>
+                )}
+
                 {/* Metadata block */}
                 <div className="rounded-lg border border-border/50 bg-muted/30 divide-y divide-border/40">
                   <div className="flex flex-wrap gap-x-8 gap-y-3 px-5 py-4 text-sm">
@@ -343,31 +368,6 @@ export function ArticleModal({ article, open, onOpenChange }: ArticleModalProps)
 
                 {/* Title */}
                 <h1 className="text-2xl font-bold leading-snug">{article.title}</h1>
-
-                {/* Image */}
-                {displayImage && (
-                  <div className="relative w-full h-72 rounded-xl overflow-hidden border border-border/30">
-                    <Image
-                      src={displayImage}
-                      alt={`Illustration for: ${article.title}`}
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 896px) 100vw, 896px"
-                      priority
-                    />
-                    {(aiImageUrl || article.aiImageUrl) && (
-                      <div className="absolute top-2 right-2">
-                        <Badge
-                          variant="secondary"
-                          className="text-[10px] font-semibold gap-1 border-0 bg-black/60 text-white backdrop-blur-sm"
-                        >
-                          <Sparkles className="size-3" /> AI Generated
-                        </Badge>
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
-                  </div>
-                )}
 
                 {/* Action buttons */}
                 <div className="flex items-center gap-3 flex-wrap">
