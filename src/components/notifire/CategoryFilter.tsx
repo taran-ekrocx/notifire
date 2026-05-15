@@ -6,12 +6,16 @@ import { motion } from 'framer-motion';
 interface CategoryFilterProps {
   activeCategory: Category | 'all';
   onCategoryChange: (category: Category | 'all') => void;
+  availableCategories?: Set<Category | 'all'>;
 }
 
 const ALL_PILL = { label: 'All', emoji: '📰', color: '#a78bfa' };
 
-export function CategoryFilter({ activeCategory, onCategoryChange }: CategoryFilterProps) {
-  const categories: (Category | 'all')[] = ['all', 'ai', 'cybersecurity', 'cloud', 'databases', 'infrastructure', 'devops', 'startup'];
+export function CategoryFilter({ activeCategory, onCategoryChange, availableCategories }: CategoryFilterProps) {
+  const allCategories: (Category | 'all')[] = ['all', 'ai', 'cybersecurity', 'cloud', 'databases', 'infrastructure', 'devops', 'startup'];
+  const categories = availableCategories
+    ? allCategories.filter((cat) => availableCategories.has(cat))
+    : allCategories;
 
   const getMeta = (cat: Category | 'all') => {
     if (cat === 'all') return ALL_PILL;

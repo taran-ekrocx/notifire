@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Article, Category, SocialTrendTopic, SocialPlatformBreakdown, SocialTrendMatch } from '@/lib/types';
+import { Article, Category, ALL_CATEGORIES, SocialTrendTopic, SocialPlatformBreakdown, SocialTrendMatch } from '@/lib/types';
 import { CategoryFilter } from './CategoryFilter';
 import { SearchBar } from './SearchBar';
 import { ArticleCard, ArticleCardSkeleton } from './ArticleCard';
@@ -65,6 +65,10 @@ export function NewsFeed() {
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
 
+  const [availableCategories, setAvailableCategories] = useState<Set<Category | 'all'>>(
+    new Set(['all', ...ALL_CATEGORIES] as (Category | 'all')[])
+  );
+
   const [state, setState] = useState<NewsFeedState>({
     articles: [],
     savedIds: new Set(),
@@ -105,6 +109,13 @@ export function NewsFeed() {
         if (!res.ok) throw new Error('Failed to load articles from database');
         const data = await res.json();
         articles = data.articles || [];
+
+        // Compute which categories have articles so the filter can hide empty ones
+        if (activeCategory === 'all') {
+          const cats = new Set<Category | 'all'>(['all']);
+          articles.forEach((a: Article) => { if (a.category) cats.add(a.category); });
+          setAvailableCategories(cats);
+        }
       } else if (activeTab === 'trending') {
         const res = await fetch('/api/trending');
         if (!res.ok) throw new Error('Failed to fetch trending');
@@ -154,6 +165,13 @@ export function NewsFeed() {
     fetchArticles();
     fetchSavedIds();
   }, [fetchArticles, fetchSavedIds]);
+
+  // If the selected category has no articles, reset to 'all'
+  useEffect(() => {
+    if (activeCategory !== 'all' && !availableCategories.has(activeCategory)) {
+      setActiveCategory('all');
+    }
+  }, [availableCategories, activeCategory]);
 
   // Save/unsave article
   const handleSave = useCallback(
@@ -305,6 +323,7 @@ export function NewsFeed() {
             <CategoryFilter
               activeCategory={activeCategory}
               onCategoryChange={setActiveCategory}
+              availableCategories={(activeTab === 'rss' || activeTab === 'ailive') ? availableCategories : undefined}
             />
           </div>
           <div className="w-full sm:w-64 shrink-0">
