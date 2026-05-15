@@ -384,10 +384,9 @@ function CategoryForm({
 interface SourceFormState {
   categoryId: string;
   url: string;
-  authority: string;
 }
 
-const EMPTY_SOURCE_FORM: SourceFormState = { categoryId: '', url: '', authority: '0.80' };
+const EMPTY_SOURCE_FORM: SourceFormState = { categoryId: '', url: '' };
 
 function RssSourcesTab({
   categories,
@@ -414,7 +413,7 @@ function RssSourcesTab({
   }
 
   function openEdit(src: RssSource) {
-    setForm({ categoryId: src.categoryId, url: src.url, authority: String(src.authority) });
+    setForm({ categoryId: src.categoryId, url: src.url });
     setError('');
     setEditTarget(src);
   }
@@ -429,7 +428,6 @@ function RssSourcesTab({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             url: form.url,
-            authority: parseFloat(form.authority),
             categoryId: form.categoryId,
           }),
         });
@@ -445,7 +443,6 @@ function RssSourcesTab({
           body: JSON.stringify({
             categoryId: form.categoryId,
             url: form.url,
-            authority: parseFloat(form.authority),
           }),
         });
         if (!res.ok) {
@@ -644,18 +641,6 @@ function SourceForm({
           onChange={(e) => onChange({ ...form, url: e.target.value })}
           className="font-mono text-sm"
         />
-      </div>
-      <div className="space-y-1.5">
-        <Label>Authority Score (0 – 1)</Label>
-        <Input
-          type="number"
-          min="0"
-          max="1"
-          step="0.01"
-          value={form.authority}
-          onChange={(e) => onChange({ ...form, authority: e.target.value })}
-        />
-        <p className="text-xs text-muted-foreground">Higher = more trusted. Used for deduplication ranking.</p>
       </div>
       {error && (
         <p className="text-sm text-destructive flex items-center gap-1.5">
