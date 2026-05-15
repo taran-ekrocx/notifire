@@ -155,6 +155,9 @@ export async function GET(
       scrapedArticles
     );
 
+    // PURGE THIN ARTICLES
+    purgeArticlesWithoutContent();
+
     // AI IMAGES
     if (withImages) {
       const topArticles =
@@ -566,6 +569,28 @@ async function enrichWithAiImages(
   } catch {
     return articles;
   }
+}
+
+// PURGE ARTICLES WITH NO DESCRIPTION AND NO CONTENT
+function purgeArticlesWithoutContent() {
+  setTimeout(async () => {
+    try {
+      const db = await getDb();
+      const result = await db.article.deleteMany({
+        where: {
+          AND: [
+            { description: '' },
+            { OR: [{ content: null }, { content: '' }] },
+          ],
+        },
+      });
+      if (result.count > 0) {
+        console.log(`[Cleanup] Purged ${result.count} article(s) with no description and no content.`);
+      }
+    } catch (err) {
+      console.warn('[Cleanup] Failed to purge thin articles:', err);
+    }
+  }, 0);
 }
 
 // AI IMAGE GENERATION
