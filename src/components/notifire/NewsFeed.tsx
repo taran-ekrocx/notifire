@@ -388,7 +388,7 @@ export function NewsFeed() {
           </TabsContent>
 
           {/* RSS / AI Live / Saved tabs */}
-          <TabsContent value={activeTab === 'docs' ? 'rss' : (activeTab === 'trending' ? 'rss' : activeTab)} className="mt-4">
+          <TabsContent value={(activeTab === 'docs' || activeTab === 'settings' || activeTab === 'trending') ? 'rss' : activeTab} className="mt-4">
             {/* Status Bar */}
             <div className="flex items-center justify-between gap-3 mb-4 px-1">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
