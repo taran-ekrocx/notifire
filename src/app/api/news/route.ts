@@ -578,14 +578,21 @@ function purgeArticlesWithoutContent() {
       const db = await getDb();
       const result = await db.article.deleteMany({
         where: {
-          AND: [
+          OR: [
+            { title: '' },
             { description: '' },
-            { OR: [{ content: null }, { content: '' }] },
+            { url: '' },
+            {
+              AND: [
+                { description: '' },
+                { OR: [{ content: null }, { content: '' }] },
+              ],
+            },
           ],
         },
       });
       if (result.count > 0) {
-        console.log(`[Cleanup] Purged ${result.count} article(s) with no description and no content.`);
+        console.log(`[Cleanup] Purged ${result.count} incomplete article(s) missing title, description, or url.`);
       }
     } catch (err) {
       console.warn('[Cleanup] Failed to purge thin articles:', err);

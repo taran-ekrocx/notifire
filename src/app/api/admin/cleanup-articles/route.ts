@@ -2,24 +2,35 @@ import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 
 /**
- * Deletes articles that have neither a description nor scraped content.
- * These are stub entries with no useful information for readers.
+ * Incomplete article filter:
+ * - title, description, or url is empty string (all are non-nullable in schema)
+ * - OR both description and content are absent (no useful readable content)
  */
-export async function POST() {
-  const db = await getDb();
-
-  const result = await db.article.deleteMany({
-    where: {
+const INCOMPLETE_WHERE = {
+  OR: [
+    { title: '' },
+    { description: '' },
+    { url: '' },
+    {
       AND: [
         { description: '' },
         { OR: [{ content: null }, { content: '' }] },
       ],
     },
-  });
+  ],
+};
+
+/**
+ * POST: delete all incomplete articles.
+ */
+export async function POST() {
+  const db = await getDb();
+
+  const result = await db.article.deleteMany({ where: INCOMPLETE_WHERE });
 
   return NextResponse.json({
     deleted: result.count,
-    message: `Removed ${result.count} article(s) with no description and no content.`,
+    message: `Removed ${result.count} incomplete article(s) (missing title, description, or url).`,
   });
 }
 
@@ -29,17 +40,10 @@ export async function POST() {
 export async function GET() {
   const db = await getDb();
 
-  const count = await db.article.count({
-    where: {
-      AND: [
-        { description: '' },
-        { OR: [{ content: null }, { content: '' }] },
-      ],
-    },
-  });
+  const count = await db.article.count({ where: INCOMPLETE_WHERE });
 
   return NextResponse.json({
     wouldDelete: count,
-    message: `${count} article(s) have no description and no content.`,
+    message: `${count} article(s) are incomplete (missing title, description, or url).`,
   });
 }
