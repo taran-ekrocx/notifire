@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Article, Category, SocialTrendTopic, SocialPlatformBreakdown, SocialTrendMatch } from '@/lib/types';
 import { CategoryFilter } from './CategoryFilter';
 import { SearchBar } from './SearchBar';
@@ -17,16 +17,13 @@ import {
   TrendingUp,
   Bookmark,
   RefreshCw,
-  Wifi,
   Database,
   Moon,
   Sun,
-  Loader2,
   Flame,
   Newspaper,
   AlertCircle,
   Clock,
-  Activity,
   BookOpen,
   Download,
 } from 'lucide-react';
@@ -34,7 +31,6 @@ import { useTheme } from 'next-themes';
 
 type SourceTab = 'rss' | 'ailive' | 'trending' | 'saved' | 'docs';
 
-const AUTO_REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
 
 interface NewsFeedState {
@@ -42,9 +38,7 @@ interface NewsFeedState {
   savedIds: Set<string>;
   loading: boolean;
   error: string | null;
-  cacheHit: boolean;
   lastUpdated: Date | null;
-  newArticlesCount: number;
   socialTrends: {
     topics: SocialTrendTopic[];
     platformBreakdown: SocialPlatformBreakdown[];
@@ -54,7 +48,7 @@ interface NewsFeedState {
 
 export function NewsFeed() {
   const { theme, setTheme } = useTheme();
-const [mounted, setMounted] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [activeCategory, setActiveCategory] = useState<Category | 'all'>('all');
   const [activeTab, setActiveTab] = useState<SourceTab>('rss');
   const [searchQuery, setSearchQuery] = useState('');
@@ -66,22 +60,16 @@ const [mounted, setMounted] = useState(false);
     savedIds: new Set(),
     loading: false,
     error: null,
-    cacheHit: false,
     lastUpdated: null,
-    newArticlesCount: 0,
     socialTrends: null,
   });
 
-  const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const lastFetchTimeRef = useRef<string | null>(null);
-
-  // Fetch saved articles IDs
   const fetchSavedIds = useCallback(async () => {
     try {
       const res = await fetch('/api/saved');
       if (res.ok) {
         const data = await res.json();
-        const ids = new Set(data.articles.map((a: Article) => a.id));
+        const ids = new Set<string>(data.articles.map((a: Article) => a.id));
         setState((prev) => ({ ...prev, savedIds: ids }));
       }
     } catch {
@@ -89,145 +77,70 @@ const [mounted, setMounted] = useState(false);
     }
   }, []);
 
-  // Fetch articles — now retrieves ALL 24h articles (no page/limit)
-  const fetchArticles = useCallback(
-    async (isAutoRefresh: boolean = false) => {
-      // Docs tab doesn't fetch articles
-      if (activeTab === 'docs') return;
+  // Load articles from DB (used on page load, tab changes, and category changes)
+  const fetchArticles = useCallback(async () => {
+    if (activeTab === 'docs') return;
 
-      setState((prev) => ({ ...prev, loading: !isAutoRefresh, error: null }));
+    setState((prev) => ({ ...prev, loading: true, error: null }));
 
-      try {
-        let articles: Article[] = [];
-        let cacheHit = false;
+    try {
+      let articles: Article[] = [];
 
-        if (activeTab === 'rss' || activeTab === 'ailive') {
-          const categoryParam = activeCategory === 'all' ? 'all' : activeCategory;
-          // No limit param = get ALL 24h articles
-          const params = new URLSearchParams({
-            category: categoryParam,
-            withImages: 'true',
-          });
-          // For auto-refresh, use incremental `since` param
-          if (isAutoRefresh && lastFetchTimeRef.current) {
-            params.set('since', lastFetchTimeRef.current);
-          }
-          // Force refresh on auto-refresh to bypass cache
-          if (isAutoRefresh) {
-            params.set('refresh', 'true');
-          }
-
-          const res = await fetch(`/api/news?${params}`);
-          if (!res.ok) throw new Error('Failed to fetch news');
-          const data = await res.json();
-          articles = data.articles || [];
-          cacheHit = data.cacheHit || false;
-          lastFetchTimeRef.current = data.lastUpdated || new Date().toISOString();
-        } else if (activeTab === 'trending') {
-          const res = await fetch('/api/trending');
-          if (!res.ok) throw new Error('Failed to fetch trending');
-          const data = await res.json();
-          articles = data.articles || [];
-          cacheHit = true;
-          // Store social trends data
-          if (data.socialTrends) {
-            setState(prev => ({
-              ...prev,
-              socialTrends: data.socialTrends,
-            }));
-          }
-        } else if (activeTab === 'saved') {
-          const res = await fetch('/api/saved');
-          if (!res.ok) throw new Error('Failed to fetch saved');
-          const data = await res.json();
-          articles = data.articles || [];
-          cacheHit = true;
+      if (activeTab === 'rss' || activeTab === 'ailive') {
+        const categoryParam = activeCategory === 'all' ? 'all' : activeCategory;
+        const res = await fetch(`/api/articles?category=${categoryParam}`);
+        if (!res.ok) throw new Error('Failed to load articles from database');
+        const data = await res.json();
+        articles = data.articles || [];
+      } else if (activeTab === 'trending') {
+        const res = await fetch('/api/trending');
+        if (!res.ok) throw new Error('Failed to fetch trending');
+        const data = await res.json();
+        articles = data.articles || [];
+        if (data.socialTrends) {
+          setState(prev => ({ ...prev, socialTrends: data.socialTrends }));
         }
-
-        // Filter to only 24h articles on client side as well (safety net)
-        const cutoff = Date.now() - TWENTY_FOUR_HOURS;
-        const recentArticles = (activeTab === 'saved')
-          ? articles // saved articles don't need 24h filter
-          : articles.filter(a => {
-              const pubTime = new Date(a.publishedAt).getTime();
-              return !isNaN(pubTime) && pubTime >= cutoff;
-            });
-
-        if (isAutoRefresh && (activeTab === 'rss' || activeTab === 'ailive')) {
-          // Merge new articles with existing ones (dedup by URL)
-          setState((prev) => {
-            const existingUrls = new Set(prev.articles.map(a => a.url));
-            const trulyNew = recentArticles.filter(a => !existingUrls.has(a.url));
-            if (trulyNew.length === 0) return { ...prev, loading: false };
-
-            const merged = [...trulyNew, ...prev.articles];
-            // Re-apply 24h filter on merged list
-            const mergedRecent = merged.filter(a => {
-              const pubTime = new Date(a.publishedAt).getTime();
-              return !isNaN(pubTime) && pubTime >= cutoff;
-            });
-
-            return {
-              ...prev,
-              articles: mergedRecent,
-              newArticlesCount: prev.newArticlesCount + trulyNew.length,
-              loading: false,
-              lastUpdated: new Date(),
-              cacheHit: false,
-              error: null,
-            };
-          });
-        } else {
-          setState((prev) => ({
-            ...prev,
-            articles: recentArticles,
-            cacheHit,
-            loading: false,
-            lastUpdated: new Date(),
-            error: null,
-            newArticlesCount: 0,
-          }));
-        }
-      } catch (err) {
-        setState((prev) => ({
-          ...prev,
-          loading: false,
-          error: err instanceof Error ? err.message : 'Failed to load articles',
-        }));
+      } else if (activeTab === 'saved') {
+        const res = await fetch('/api/saved');
+        if (!res.ok) throw new Error('Failed to fetch saved');
+        const data = await res.json();
+        articles = data.articles || [];
       }
-    },
-    [activeTab, activeCategory]
-  );
-useEffect(() => {
-  setMounted(true);
-}, []);
 
-// Initial fetch & tab/category change
-useEffect(() => {
-    lastFetchTimeRef.current = null; // reset incremental tracking
-    fetchArticles(false);
+      // 24h safety filter (DB route already filters, kept for trending/saved)
+      const cutoff = Date.now() - TWENTY_FOUR_HOURS;
+      const recentArticles = activeTab === 'saved'
+        ? articles
+        : articles.filter(a => {
+            const pubTime = new Date(a.publishedAt).getTime();
+            return !isNaN(pubTime) && pubTime >= cutoff;
+          });
+
+      setState((prev) => ({
+        ...prev,
+        articles: recentArticles,
+        loading: false,
+        lastUpdated: new Date(),
+        error: null,
+      }));
+    } catch (err) {
+      setState((prev) => ({
+        ...prev,
+        loading: false,
+        error: err instanceof Error ? err.message : 'Failed to load articles',
+      }));
+    }
+  }, [activeTab, activeCategory]);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Load from DB on mount, tab change, and category change
+  useEffect(() => {
+    fetchArticles();
     fetchSavedIds();
   }, [fetchArticles, fetchSavedIds]);
-
-  // Auto-refresh every 5 minutes for RSS and AI Live tabs
-  useEffect(() => {
-    if (autoRefreshRef.current) {
-      clearInterval(autoRefreshRef.current);
-      autoRefreshRef.current = null;
-    }
-
-    if (activeTab === 'rss' || activeTab === 'ailive') {
-      autoRefreshRef.current = setInterval(() => {
-        fetchArticles(true); // incremental refresh
-      }, AUTO_REFRESH_INTERVAL);
-    }
-
-    return () => {
-      if (autoRefreshRef.current) {
-        clearInterval(autoRefreshRef.current);
-      }
-    };
-  }, [activeTab, fetchArticles]);
 
   // Save/unsave article
   const handleSave = useCallback(
@@ -255,7 +168,6 @@ useEffect(() => {
           });
         }
       } catch {
-        // Revert on error
         setState((prev) => {
           const newIds = new Set(prev.savedIds);
           if (isSaved) newIds.add(articleId);
@@ -267,25 +179,23 @@ useEffect(() => {
     [state.savedIds]
   );
 
-  // Open article detail
   const handleArticleClick = useCallback((article: Article) => {
     setSelectedArticle(article);
     setModalOpen(true);
   }, []);
 
-  // Refresh (full, not incremental)
-  const handleRefresh = useCallback(() => {
-    lastFetchTimeRef.current = null;
-    setState((prev) => ({ ...prev, newArticlesCount: 0 }));
-    fetchArticles(false);
-  }, [fetchArticles]);
+  // Refresh: trigger RSS fetch for all categories, then reload from DB
+  const handleRefresh = useCallback(async () => {
+    if (activeTab === 'docs') return;
+    setState((prev) => ({ ...prev, loading: true, error: null }));
+    try {
+      await fetch('/api/news?category=all&refresh=true&withImages=true');
+    } catch {
+      // best-effort — reload from DB regardless
+    }
+    await fetchArticles();
+  }, [activeTab, fetchArticles]);
 
-  // Dismiss new articles notification
-  const handleDismissNew = useCallback(() => {
-    setState((prev) => ({ ...prev, newArticlesCount: 0 }));
-  }, []);
-
-  // Filter articles by search query
   const filteredArticles = state.articles.filter((article) => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
@@ -299,11 +209,6 @@ useEffect(() => {
   const formatLastUpdated = (date: Date | null) => {
     if (!date) return '—';
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-
-  const formatAutoRefresh = () => {
-    const mins = AUTO_REFRESH_INTERVAL / 60000;
-    return `Auto-refresh every ${mins}min`;
   };
 
   return (
@@ -344,21 +249,6 @@ useEffect(() => {
                 </Button>
               </a>
 
-              {/* Live indicator — always on for RSS/AI Live */}
-              {(activeTab === 'rss' || activeTab === 'ailive') && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="flex items-center gap-1.5"
-                >
-                  <span className="relative flex size-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full size-2 bg-green-500" />
-                  </span>
-                  <span className="text-xs font-medium text-green-500 hidden sm:inline">Live</span>
-                </motion.div>
-              )}
-
               <Button
                 variant="ghost"
                 size="icon"
@@ -367,53 +257,32 @@ useEffect(() => {
                 aria-label="Toggle theme"
               >
                 <AnimatePresence mode="wait">
-  {mounted &&
-    (theme === 'dark' ? (
-      <motion.div
-        key="sun"
-        initial={{ rotate: -90, opacity: 0 }}
-        animate={{ rotate: 0, opacity: 1 }}
-        exit={{ rotate: 90, opacity: 0 }}
-      >
-        <Sun className="size-4" />
-      </motion.div>
-    ) : (
-      <motion.div
-        key="moon"
-        initial={{ rotate: 90, opacity: 0 }}
-        animate={{ rotate: 0, opacity: 1 }}
-        exit={{ rotate: -90, opacity: 0 }}
-      >
-        <Moon className="size-4" />
-      </motion.div>
-    ))}
-</AnimatePresence>
+                  {mounted &&
+                    (theme === 'dark' ? (
+                      <motion.div
+                        key="sun"
+                        initial={{ rotate: -90, opacity: 0 }}
+                        animate={{ rotate: 0, opacity: 1 }}
+                        exit={{ rotate: 90, opacity: 0 }}
+                      >
+                        <Sun className="size-4" />
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="moon"
+                        initial={{ rotate: 90, opacity: 0 }}
+                        animate={{ rotate: 0, opacity: 1 }}
+                        exit={{ rotate: -90, opacity: 0 }}
+                      >
+                        <Moon className="size-4" />
+                      </motion.div>
+                    ))}
+                </AnimatePresence>
               </Button>
             </div>
           </div>
         </div>
       </header>
-
-      {/* New articles notification bar */}
-      <AnimatePresence>
-        {state.newArticlesCount > 0 && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
-          >
-            <button
-              onClick={() => { handleRefresh(); }}
-              className="w-full bg-violet-500/10 border-b border-violet-500/20 text-violet-500 text-xs font-medium py-2 px-4 flex items-center justify-center gap-2 hover:bg-violet-500/20 transition-colors"
-            >
-              <Activity className="size-3" />
-              <span>{state.newArticlesCount} new article{state.newArticlesCount > 1 ? 's' : ''} available</span>
-              <span className="text-violet-400">— Click to refresh</span>
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-4 space-y-4">
@@ -465,12 +334,12 @@ useEffect(() => {
             </TabsTrigger>
           </TabsList>
 
-          {/* Docs tab — full documentation panel */}
+          {/* Docs tab */}
           <TabsContent value="docs" className="mt-4">
             <DocsPanel />
           </TabsContent>
 
-          {/* Trending tab — social trends panel + articles */}
+          {/* Trending tab */}
           <TabsContent value="trending" className="mt-4">
             {state.socialTrends && (
               <div className="mb-6">
@@ -482,7 +351,6 @@ useEffect(() => {
               </div>
             )}
 
-            {/* Trending articles grid */}
             <div className="space-y-4">
               <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
                 <Flame className="size-4 text-orange-500" />
@@ -507,37 +375,28 @@ useEffect(() => {
             </div>
           </TabsContent>
 
-          {/* All other tabs share same content area */}
+          {/* RSS / AI Live / Saved tabs */}
           <TabsContent value={activeTab === 'docs' ? 'rss' : (activeTab === 'trending' ? 'rss' : activeTab)} className="mt-4">
             {/* Status Bar */}
             <div className="flex items-center justify-between gap-3 mb-4 px-1">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 {(activeTab === 'rss' || activeTab === 'ailive') ? (
-                  <div className="flex items-center gap-1">
-                    <Clock className="size-3" />
-                    <span>Last 24h</span>
-                  </div>
-                ) : state.cacheHit ? (
-                  <div className="flex items-center gap-1">
-                    <Database className="size-3" />
-                    <span>Cached</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1">
-                    <Wifi className="size-3" />
-                    <span>Live</span>
-                  </div>
-                )}
+                  <>
+                    <div className="flex items-center gap-1">
+                      <Clock className="size-3" />
+                      <span>Last 24h</span>
+                    </div>
+                    <span className="text-border">·</span>
+                    <div className="flex items-center gap-1">
+                      <Database className="size-3" />
+                      <span>From database</span>
+                    </div>
+                  </>
+                ) : null}
                 <span className="text-border">·</span>
                 <span>Updated {formatLastUpdated(state.lastUpdated)}</span>
                 <span className="text-border">·</span>
                 <span>{filteredArticles.length} articles</span>
-                {(activeTab === 'rss' || activeTab === 'ailive') && (
-                  <>
-                    <span className="text-border">·</span>
-                    <span className="text-green-500 hidden sm:inline">{formatAutoRefresh()}</span>
-                  </>
-                )}
               </div>
               <Button
                 variant="ghost"
@@ -593,7 +452,7 @@ useEffect(() => {
                       ? 'Try a different search query'
                       : activeTab === 'saved'
                       ? 'Save articles to see them here'
-                      : 'No articles published in the last 24 hours for this category'}
+                      : 'No articles in the database for the last 24 hours — click Refresh to fetch the latest'}
                   </p>
                 </div>
               </motion.div>
@@ -617,11 +476,11 @@ useEffect(() => {
               </div>
             )}
 
-            {/* End of list indicator */}
+            {/* End of list */}
             {!state.loading && filteredArticles.length > 0 && (
               <div className="flex justify-center py-8">
                 <p className="text-xs text-muted-foreground">
-                  {filteredArticles.length} articles from the last 24 hours · Auto-refreshes every 5 min
+                  {filteredArticles.length} articles from the last 24 hours
                 </p>
               </div>
             )}
