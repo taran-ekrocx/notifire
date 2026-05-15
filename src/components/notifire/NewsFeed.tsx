@@ -6,7 +6,6 @@ import { CategoryFilter } from './CategoryFilter';
 import { SearchBar } from './SearchBar';
 import { ArticleCard, ArticleCardSkeleton } from './ArticleCard';
 import { ArticleModal } from './ArticleModal';
-import { DocsPanel } from './DocsPanel';
 import { SettingsPanel } from './SettingsPanel';
 import { SocialTrendsPanel } from './SocialTrendsPanel';
 import { Button } from '@/components/ui/button';
@@ -25,14 +24,13 @@ import {
   Newspaper,
   AlertCircle,
   Clock,
-  BookOpen,
   Download,
   Settings,
   CalendarRange,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 
-type SourceTab = 'rss' | 'ailive' | 'trending' | 'saved' | 'docs' | 'settings';
+type SourceTab = 'rss' | 'ailive' | 'trending' | 'saved' | 'settings';
 
 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
 
@@ -93,7 +91,7 @@ export function NewsFeed() {
 
   // Load articles from DB (used on page load, tab changes, category changes, and date changes)
   const fetchArticles = useCallback(async () => {
-    if (activeTab === 'docs' || activeTab === 'settings') return;
+    if (activeTab === 'settings') return;
 
     setState((prev) => ({ ...prev, loading: true, error: null }));
 
@@ -217,7 +215,7 @@ export function NewsFeed() {
 
   // Refresh: trigger RSS fetch for all categories, then reload from DB
   const handleRefresh = useCallback(async () => {
-    if (activeTab === 'docs' || activeTab === 'settings') return;
+    if (activeTab === 'settings') return;
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
       await fetch('/api/news?category=all&refresh=true&withImages=true');
@@ -372,7 +370,7 @@ export function NewsFeed() {
 
         {/* Source Tabs */}
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as SourceTab)}>
-          <TabsList className="w-full sm:w-auto grid grid-cols-6 sm:inline-flex h-9">
+          <TabsList className="w-full sm:w-auto grid grid-cols-5 sm:inline-flex h-9">
             <TabsTrigger value="rss" className="gap-1.5 text-xs sm:text-sm">
               <Rss className="size-3.5" />
               <span className="hidden sm:inline">24h Feed</span>
@@ -398,22 +396,12 @@ export function NewsFeed() {
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value="docs" className="gap-1.5 text-xs sm:text-sm">
-              <BookOpen className="size-3.5" />
-              <span className="hidden sm:inline">Docs</span>
-              <span className="sm:hidden">Docs</span>
-            </TabsTrigger>
             <TabsTrigger value="settings" className="gap-1.5 text-xs sm:text-sm">
               <Settings className="size-3.5" />
               <span className="hidden sm:inline">Settings</span>
               <span className="sm:hidden">Config</span>
             </TabsTrigger>
           </TabsList>
-
-          {/* Docs tab */}
-          <TabsContent value="docs" className="mt-4">
-            <DocsPanel />
-          </TabsContent>
 
           {/* Settings tab */}
           <TabsContent value="settings" className="mt-4">
@@ -457,7 +445,7 @@ export function NewsFeed() {
           </TabsContent>
 
           {/* RSS / AI Live / Saved tabs */}
-          <TabsContent value={(activeTab === 'docs' || activeTab === 'settings' || activeTab === 'trending') ? 'rss' : activeTab} className="mt-4">
+          <TabsContent value={(activeTab === 'settings' || activeTab === 'trending') ? 'rss' : activeTab} className="mt-4">
             {/* Status Bar */}
             <div className="flex items-center justify-between gap-3 mb-4 px-1">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
