@@ -64,8 +64,10 @@ export async function fetchRSSFeeds(
     const feed = result.value;
 
     for (const item of feed.items) {
+      const title = (item.title ?? '').trim();
+      const link = (item.link ?? '').trim();
       const description = (item.contentSnippet ?? item.summary ?? '').trim();
-      if (!item.title || !item.link || !description) continue;
+      if (!title || !link || !description) continue;
 
       // Filter: only include articles published within the last 24 hours
       const pubDate = new Date(item.isoDate ?? item.pubDate ?? '');
@@ -73,7 +75,7 @@ export async function fetchRSSFeeds(
         continue; // Skip articles older than 24h
       }
 
-      const combinedText = `${item.title} ${description}`;
+      const combinedText = `${title} ${description}`;
       const detectedCategory = detectCategory(combinedText) ?? category;
       const tags = extractTags(combinedText);
 
@@ -85,8 +87,8 @@ export async function fetchRSSFeeds(
 
       articles.push({
         id: '',
-        title: item.title.trim(),
-        url: item.link,
+        title,
+        url: link,
         description: description.slice(0, 300),
         publishedAt: item.isoDate ?? item.pubDate ?? new Date().toISOString(),
         source: feed.title ?? new URL(feedUrl).hostname,
