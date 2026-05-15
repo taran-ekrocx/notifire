@@ -132,7 +132,7 @@ export function ArticleModal({ article, open, onOpenChange }: ArticleModalProps)
           className="flex flex-col gap-0"
           style={{ height: 'calc(100vh - 4px)' }}
         >
-          {/* Sticky tab header */}
+          {/* Sticky header — category badge + title only */}
           <div className="flex items-center gap-4 px-6 py-3 border-b border-border/50 bg-background shrink-0">
             <Badge
               variant="secondary"
@@ -142,10 +142,6 @@ export function ArticleModal({ article, open, onOpenChange }: ArticleModalProps)
               {meta.emoji} {meta.label}
             </Badge>
             <span className="text-sm font-semibold truncate flex-1 min-w-0">{article.title}</span>
-            <TabsList className="shrink-0">
-              <TabsTrigger value="rss-data">RSS Data</TabsTrigger>
-              <TabsTrigger value="scraped-data">Scraped Data</TabsTrigger>
-            </TabsList>
           </div>
 
           {/* ── RSS Data Tab ── */}
@@ -154,6 +150,23 @@ export function ArticleModal({ article, open, onOpenChange }: ArticleModalProps)
             className="flex-1 overflow-y-auto outline-none m-0"
           >
             <div className="p-6 max-w-4xl mx-auto space-y-6 pb-12">
+
+                {/* Tab switcher + Read Full Article — above title */}
+                <div className="flex items-center justify-between gap-4">
+                  <TabsList>
+                    <TabsTrigger value="rss-data">RSS Data</TabsTrigger>
+                    <TabsTrigger value="scraped-data">Scraped Data</TabsTrigger>
+                  </TabsList>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="gap-1.5 shrink-0"
+                    onClick={() => window.open(article.url, '_blank', 'noopener,noreferrer')}
+                  >
+                    <ExternalLink className="size-3.5" />
+                    Read Full Article
+                  </Button>
+                </div>
 
                 {/* Title & Description */}
                 <div className="space-y-3">
@@ -447,24 +460,16 @@ export function ArticleModal({ article, open, onOpenChange }: ArticleModalProps)
           >
             <div className="p-6 max-w-4xl mx-auto space-y-6 pb-12">
 
-                {/* Title */}
-                <h1 className="text-2xl font-bold leading-snug">{article.title}</h1>
-
-                {/* Action buttons */}
-                <div className="flex items-center gap-3 flex-wrap">
-                  <Button
-                    variant="default"
-                    size="sm"
-                    className="gap-1.5"
-                    onClick={() => window.open(article.url, '_blank', 'noopener,noreferrer')}
-                  >
-                    <ExternalLink className="size-3.5" />
-                    Read Full Article
-                  </Button>
+                {/* Tab switcher — above title */}
+                <div className="flex items-center justify-between gap-4">
+                  <TabsList>
+                    <TabsTrigger value="rss-data">RSS Data</TabsTrigger>
+                    <TabsTrigger value="scraped-data">Scraped Data</TabsTrigger>
+                  </TabsList>
                   <Button
                     variant="outline"
                     size="sm"
-                    className="gap-1.5"
+                    className="gap-1.5 shrink-0"
                     onClick={handleRegenerateContent}
                     disabled={regenerating}
                   >
@@ -475,6 +480,9 @@ export function ArticleModal({ article, open, onOpenChange }: ArticleModalProps)
                     )}
                   </Button>
                 </div>
+
+                {/* Title */}
+                <h1 className="text-2xl font-bold leading-snug">{article.title}</h1>
 
                 {/* Article Content */}
                 <div className="space-y-3">
