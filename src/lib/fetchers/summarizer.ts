@@ -1,11 +1,7 @@
 // src/lib/fetchers/summarizer.ts
 
-import OpenAI from 'openai';
-
-const client = new OpenAI({
-  apiKey: process.env.OPENROUTER_API_KEY!,
-  baseURL: 'https://openrouter.ai/api/v1',
-});
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyBLi67n5C6wxFDDVc_Q-jfaelZr3kMEW6s';
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
 export type ArticleSummary = {
   fullSummary: string;
@@ -17,9 +13,30 @@ export type ArticleSummary = {
 
 function truncateText(text: string, maxChars = 12000) {
   if (!text) return '';
-  return text.length > maxChars
-    ? text.slice(0, maxChars)
-    : text;
+  return text.length > maxChars ? text.slice(0, maxChars) : text;
+}
+
+async function callGemini(prompt: string): Promise<string | null> {
+  try {
+    const res = await fetch(GEMINI_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          temperature: 0.4,
+          maxOutputTokens: 1200,
+        },
+      }),
+      cache: 'no-store',
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text || null;
+  } catch {
+    return null;
+  }
 }
 
 export async function summarizeArticle(
@@ -29,7 +46,7 @@ export async function summarizeArticle(
   source = ''
 ): Promise<ArticleSummary> {
   try {
-    const cleanText = truncateText(
+    const inputText = truncateText(
       [
         title && `Title: ${title}`,
         source && `Source: ${source}`,
@@ -40,20 +57,9 @@ export async function summarizeArticle(
         .join('\n\n')
     );
 
-    const response = await client.chat.completions.create({
-      model: 'openai/gpt-4.1-mini',
+    const prompt = `You are a tech news analyst.
 
-      max_tokens: 1200,
-
-      temperature: 0.4,
-
-      messages: [
-        {
-          role: 'system',
-          content: `
-You are a tech news analyst.
-
-Return STRICT JSON only:
+Analyze the following article and return STRICT JSON only matching this schema:
 {
   "fullSummary": "Concise paragraph summary",
   "keyPoints": ["point 1", "point 2", "point 3"],
@@ -62,25 +68,17 @@ Return STRICT JSON only:
   "relatedTopics": ["AI", "OpenAI"]
 }
 
-Sentiment must be positive, neutral, or negative.
-`,
-        },
-        {
-          role: 'user',
-          content: cleanText,
-        },
-      ],
-    });
+Sentiment must be exactly one of: positive, neutral, or negative.
 
-    return normalizeSummary(
-      JSON.parse(response.choices?.[0]?.message?.content || '{}'),
-      title,
-      description,
-      source
-    );
+Article:
+${inputText}`;
+
+    const raw = await callGemini(prompt);
+    if (!raw) return quickSummarize(title, description, source);
+
+    return normalizeSummary(JSON.parse(raw), title, description, source);
   } catch (error) {
     console.error('[Summarizer] Error:', error);
-
     return quickSummarize(title, description, source);
   }
 }
@@ -139,9 +137,7 @@ function normalizeSummary(
       `${title || 'This article'} covers recent technology news.`,
     keyPoints,
     readTimeMinutes:
-      typeof value.readTimeMinutes === 'number'
-        ? value.readTimeMinutes
-        : 3,
+      typeof value.readTimeMinutes === 'number' ? value.readTimeMinutes : 3,
     sentiment,
     relatedTopics:
       Array.isArray(value.relatedTopics) && value.relatedTopics.length
