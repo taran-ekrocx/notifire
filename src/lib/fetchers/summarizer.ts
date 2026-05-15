@@ -1,7 +1,8 @@
 // src/lib/fetchers/summarizer.ts
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyBLi67n5C6wxFDDVc_Q-jfaelZr3kMEW6s';
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+import { getGeminiApiKey } from '../ai/geminiKey';
+
+const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
 export type ArticleSummary = {
   fullSummary: string;
@@ -18,6 +19,8 @@ function truncateText(text: string, maxChars = 12000) {
 
 async function callGemini(prompt: string): Promise<string | null> {
   try {
+    const key = await getGeminiApiKey();
+    const GEMINI_URL = `${GEMINI_BASE_URL}?key=${key}`;
     const res = await fetch(GEMINI_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

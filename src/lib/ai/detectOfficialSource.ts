@@ -1,7 +1,8 @@
 // lib/ai/detectOfficialSource.ts
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyBLi67n5C6wxFDDVc_Q-jfaelZr3kMEW6s';
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+import { getGeminiApiKey } from './geminiKey';
+
+const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
 type OfficialSourceCandidate = {
   name: string;
@@ -111,6 +112,8 @@ Rules:
 - Do not include news sites unless they are the company itself.
 - Return {"name": null, "domains": []} if unsure.`;
 
+    const key = await getGeminiApiKey();
+    const GEMINI_URL = `${GEMINI_BASE_URL}?key=${key}`;
     const res = await fetch(GEMINI_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

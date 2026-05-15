@@ -98,3 +98,34 @@ model ScrapeJob {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model RssCategory {
+  id         String      @id @default(cuid())
+  name       String      @unique
+  label      String
+  emoji      String
+  color      String
+  isActive   Boolean     @default(true)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  rssSources RssSource[]
+}
+
+model RssSource {
+  id          String      @id @default(cuid())
+  categoryId  String
+  category    RssCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  url         String
+  authority   Float       @default(0.8)
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([categoryId, url])
+}

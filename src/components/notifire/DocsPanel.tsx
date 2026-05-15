@@ -416,7 +416,7 @@ export function DocsPanel() {
         <Section id="overview" title="How It Works" icon={<Zap className="size-4" />} color="#f59e0b">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
-              { label: 'Fetch', desc: 'RSS feeds polled every 5 min across 15+ sources + social signals from Reddit, Twitter/X, HackerNews', icon: <Rss className="size-4" />, color: '#ee802f' },
+              { label: 'Fetch', desc: 'RSS feeds fetched on user refresh across 15+ sources + social signals from Reddit, Twitter/X, HackerNews', icon: <Rss className="size-4" />, color: '#ee802f' },
               { label: 'Process', desc: 'Tag → Deduplicate → Social Match → Score → Filter 24h → Persist', icon: <Workflow className="size-4" />, color: '#10b981' },
               { label: 'Enrich', desc: 'On-demand: scrape → AI summary → generate image → save', icon: <Brain className="size-4" />, color: '#8b5cf6' },
             ].map((item) => (
@@ -441,7 +441,7 @@ export function DocsPanel() {
         {/* ── Data Pipeline Flow ───────────────────────────── */}
         <Section id="pipeline" title="Data Pipeline" icon={<Activity className="size-4" />} color="#10b981">
           <p className="text-xs text-muted-foreground mb-3">
-            Every 5 minutes (or on user refresh), the full pipeline executes to fetch, process, and store all articles
+            On user refresh, the full pipeline executes to fetch, process, and store all articles
             published within the last 24 hours:
           </p>
           <FlowDiagram steps={DATA_PIPELINE} />
@@ -704,7 +704,7 @@ export function DocsPanel() {
               { label: 'ISR', desc: 'revalidate = 300s on /api/news route for stale-while-revalidate', color: '#3b82f6' },
               { label: 'DB-Level Cache', desc: 'Summaries & scraped content persisted to PostgreSQL — avoids re-scraping on repeat visits', color: '#336791' },
               { label: 'Image Disk Cache', desc: 'AI-generated images saved to /public/generated/ with MD5 hash filenames — never regenerated', color: '#f59e0b' },
-              { label: 'Auto-Refresh', desc: 'Client polls every 5 min with ?since=<lastUpdated> for incremental updates', color: '#8b5cf6' },
+              { label: 'Manual Refresh', desc: 'Refresh button triggers full RSS fetch + DB write; category/tab navigation reads from database directly', color: '#8b5cf6' },
               { label: '24h Rolling Window', desc: 'Server + client both filter articles to last 24h only, ensuring fresh content', color: '#ef4444' },
             ].map((item) => (
               <div key={item.label} className="flex items-start gap-3 p-3 rounded-lg bg-muted/30 border border-border/30">
@@ -802,7 +802,7 @@ export function DocsPanel() {
 ├── components/
 │   ├── ui/                 # 50+ shadcn/ui components (Radix-based)
 │   └── notifire/
-│       ├── NewsFeed.tsx     # Main feed: tabs, categories, auto-refresh
+│       ├── NewsFeed.tsx     # Main feed: tabs, categories, manual refresh
 │       ├── ArticleCard.tsx  # Card with image, tags, trending badge
 │       ├── ArticleModal.tsx # Detail modal: AI summary, drafts, scrape
 │       ├── CategoryFilter.tsx # Category pill selector
@@ -873,7 +873,7 @@ export function DocsPanel() {
         <Section id="tabs" title="Frontend Tabs" icon={<Layers className="size-4" />} color="#8b5cf6" defaultOpen={false}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {[
-              { tab: '24h Feed', icon: '📡', desc: 'All articles from the last 24 hours across all RSS sources. Auto-refreshes every 5 minutes with incremental updates via ?since= parameter.' },
+              { tab: '24h Feed', icon: '📡', desc: 'All articles from the last 24 hours across all RSS sources. Data read directly from the database; use the Refresh button to fetch the latest RSS articles.' },
               { tab: 'AI Live', icon: '⚡', desc: 'Same 24h feed with AI enrichment indicators. Shows which articles have AI-generated images, summaries, and analysis.' },
               { tab: 'Trending', icon: '🔥', desc: 'Articles sorted by trend score (0-100). Includes source velocity signals, social platform breakdown, and category distribution analytics.' },
               { tab: 'Saved', icon: '🔖', desc: 'User-bookmarked articles persisted in PostgreSQL. No 24h filter applied — saved articles persist indefinitely.' },

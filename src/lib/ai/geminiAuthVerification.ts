@@ -1,6 +1,7 @@
 // lib/ai/geminiAuthVerification.ts
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyBLi67n5C6wxFDDVc_Q-jfaelZr3kMEW6s';
+import { getGeminiApiKey } from './geminiKey';
+
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent';
 
 export interface GeminiAuthResult {
@@ -62,6 +63,7 @@ Return ONLY valid JSON matching this schema:
 ${OUTPUT_SCHEMA}`;
 
   try {
+    const GEMINI_API_KEY = await getGeminiApiKey();
     const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

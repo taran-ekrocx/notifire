@@ -1,6 +1,7 @@
 // src/lib/fetchers/trendSignals.ts
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyBLi67n5C6wxFDDVc_Q-jfaelZr3kMEW6s';
+import { getGeminiApiKey } from '../ai/geminiKey';
+
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
 export interface GeminiTrendSignals {
@@ -62,6 +63,7 @@ export async function detectTrendSignals(article: {
 
     const userText = `${SYSTEM_PROMPT}\n\nOutput JSON Schema:\n${OUTPUT_SCHEMA}\n\nInput:\n${JSON.stringify(input)}`;
 
+    const GEMINI_API_KEY = await getGeminiApiKey();
     const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

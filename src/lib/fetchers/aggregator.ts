@@ -17,6 +17,30 @@ import { deduplicate } from '../processors/deduplicator';
 
 import { detectTrendSignals, EMPTY_TREND_SIGNALS } from './trendSignals';
 
+import { getDb } from '../db';
+
+async function getSourcesForCategories(
+  targets: Category[]
+): Promise<Record<string, Array<{ url: string; authority: number }>>> {
+  try {
+    const db = await getDb();
+    const dbCategories = await db.rssCategory.findMany({
+      where: { isActive: true, name: { in: targets } },
+      include: { rssSources: { where: { isActive: true } } },
+    });
+
+    const result: Record<string, Array<{ url: string; authority: number }>> = {};
+    for (const cat of dbCategories) {
+      if (cat.rssSources.length > 0) {
+        result[cat.name] = cat.rssSources.map((s) => ({ url: s.url, authority: s.authority }));
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
 export async function fetchAllSources(
   categoryParam: string,
   trendingOnly = false
@@ -30,10 +54,15 @@ export async function fetchAllSources(
       ? [categoryParam as Category]
       : ALL_CATEGORIES;
 
+  // Load DB-managed sources; fall back to hardcoded per category
+  const dbSources = await getSourcesForCategories(targets);
+  const effectiveSources = (cat: Category) =>
+    dbSources[cat]?.length ? dbSources[cat] : (RSS_SOURCES[cat] ?? []);
+
   // Build a map from article URL hostname → rss source base domain
   const rssDomainByCategory: Record<string, string> = {};
   for (const cat of targets) {
-    const sources = RSS_SOURCES[cat] ?? [];
+    const sources = effectiveSources(cat);
     if (sources.length > 0) {
       try {
         rssDomainByCategory[cat] = new URL(sources[0].url).hostname.replace(/^www\./, '');
@@ -48,7 +77,7 @@ export async function fetchAllSources(
     await Promise.allSettled(
       targets.map((cat) =>
         fetchRSSFeeds(
-          RSS_SOURCES[cat] ?? [],
+          effectiveSources(cat),
           cat
         )
       )
