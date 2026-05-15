@@ -1,386 +1,97 @@
 // src/lib/fetchers/trendSignals.ts
 
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyBLi67n5C6wxFDDVc_Q-jfaelZr3kMEW6s';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+
+export interface GeminiTrendSignals {
+  twitter: {
+    tweet_count: number;
+    retweet_count: number;
+    hashtags: string[];
+    mention_count: number;
+  };
+  reddit: {
+    reddit_post_count: number;
+    reddit_comment_count: number;
+    reddit_upvote_count: number;
+    reddit_engagement: number;
+    subreddits: string[];
+  };
+  google: {
+    google_trend_score: number;
+    google_search_frequency_delta: number;
+    related_queries: string[];
+  };
+  reasoning?: string;
+}
+
 export interface TrendSignal {
   isTrending: boolean;
-
-  trendingOn: string[];
-
-  trendingCount: number;
+  trendSignals: GeminiTrendSignals;
 }
 
-interface PlatformResult {
-  trending: boolean;
-
-  count: number;
-}
-
-const TREND_THRESHOLD = {
-  twitter: 25,
-  reddit: 250,
-  hackernews: 50, // points + comments across top stories in last 48h
+export const EMPTY_TREND_SIGNALS: GeminiTrendSignals = {
+  twitter: { tweet_count: 0, retweet_count: 0, hashtags: [], mention_count: 0 },
+  reddit: { reddit_post_count: 0, reddit_comment_count: 0, reddit_upvote_count: 0, reddit_engagement: 0, subreddits: [] },
+  google: { google_trend_score: 0, google_search_frequency_delta: 0, related_queries: [] },
 };
 
-/**
- * REAL trend detection
- * --------------------------------
- * Checks:
- * - Twitter/X  (requires TWITTER_BEARER_TOKEN env var)
- * - Reddit     (public API, no auth)
- * - Hacker News via Algolia (public API, no auth)
- *
- * Note: Google Trends dailytrends endpoint was deprecated/removed.
- * Hacker News is used instead as it covers the same tech-news audience.
- */
-export async function detectTrendSignals(
-  article: {
-    title: string;
-    description?: string;
-    tags?: string[];
-  }
-): Promise<TrendSignal> {
-  const trendingOn: string[] = [];
+const SYSTEM_PROMPT =
+  'You are a social media and search trend analyst. Given a news article, estimate its trending potential across Twitter/X, Reddit, and Google Search. Return ONLY valid JSON matching the schema below';
 
-  let trendingCount = 0;
+const OUTPUT_SCHEMA = `{
+  "twitter": { "tweet_count": integer, "retweet_count": integer, "hashtags": [string], "mention_count": integer },
+  "reddit": { "reddit_post_count": integer, "reddit_comment_count": integer, "reddit_upvote_count": integer, "reddit_engagement": integer, "subreddits": [string] },
+  "google": { "google_trend_score": integer, "google_search_frequency_delta": float, "related_queries": [string] },
+  "reasoning": string
+}`;
 
-  const query = buildTrendQuery(
-    article.title,
-    article.tags || []
-  );
-
-  // CHECK ALL PLATFORMS
-  const [
-    twitter,
-    reddit,
-    hackernews,
-  ] = await Promise.all([
-    checkTwitterTrend(query),
-
-    checkRedditTrend(query),
-
-    checkHackerNewsTrend(query),
-  ]);
-
-  // TWITTER/X
-  if (twitter.trending) {
-    trendingOn.push('twitter');
-
-    trendingCount += twitter.count;
-  }
-
-  // REDDIT
-  if (reddit.trending) {
-    trendingOn.push('reddit');
-
-    trendingCount += reddit.count;
-  }
-
-  // HACKER NEWS
-  if (hackernews.trending) {
-    trendingOn.push('hackernews');
-
-    trendingCount += hackernews.count;
-  }
-
-  return {
-    isTrending:
-      trendingOn.length > 0,
-
-    trendingOn,
-
-    trendingCount,
-  };
-}
-
-/**
- * BUILD SEARCH QUERY
- */
-function buildTrendQuery(
-  title: string,
-  tags: string[]
-) {
-  const cleanedTitle =
-    title
-      .replace(/[^\w\s]/g, '')
-      .split(' ')
-      .slice(0, 6)
-      .join(' ');
-
-  return `${cleanedTitle} ${tags
-    .slice(0, 3)
-    .join(' ')}`.trim();
-}
-
-/**
- * TWITTER/X TREND CHECK
- * --------------------------------
- * NOTE:
- * Official Twitter API is paid/restricted.
- *
- * Uses real Twitter/X public metrics when
- * TWITTER_BEARER_TOKEN is configured.
- */
-async function checkTwitterTrend(
-  query: string
-): Promise<PlatformResult> {
+export async function detectTrendSignals(article: {
+  title: string;
+  description?: string;
+  category?: string;
+  publishedAt?: string;
+}): Promise<TrendSignal> {
   try {
-    const bearerToken =
-      process.env
-        .TWITTER_BEARER_TOKEN;
+    const input = {
+      title: article.title,
+      description: article.description || '',
+      category: article.category || 'tech',
+      published_at: article.publishedAt || new Date().toISOString(),
+    };
 
-    if (!bearerToken) {
-      return {
-        trending: false,
+    const userText = `${SYSTEM_PROMPT}\n\nOutput JSON Schema:\n${OUTPUT_SCHEMA}\n\nInput:\n${JSON.stringify(input)}`;
 
-        count: 0,
-      };
-    }
-
-    const url = new URL(
-      'https://api.twitter.com/2/tweets/search/recent'
-    );
-
-    url.searchParams.set(
-      'query',
-      `${query} -is:retweet lang:en`
-    );
-
-    url.searchParams.set(
-      'max_results',
-      '25'
-    );
-
-    url.searchParams.set(
-      'tweet.fields',
-      'public_metrics'
-    );
-
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${bearerToken}`,
-      },
-
+    const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: userText }] }],
+        generationConfig: { responseMimeType: 'application/json', temperature: 0.4 },
+      }),
       cache: 'no-store',
     });
 
     if (!response.ok) {
-      return {
-        trending: false,
-
-        count: 0,
-      };
-    }
-
-    const data =
-      await response.json();
-
-    const tweets =
-      data?.data || [];
-
-    const count =
-      tweets.reduce(
-        (
-          total: number,
-          tweet: {
-            public_metrics?: {
-              like_count?: number;
-              retweet_count?: number;
-              reply_count?: number;
-              quote_count?: number;
-              bookmark_count?: number;
-              impression_count?: number;
-            };
-          }
-        ) => {
-          const metrics =
-            tweet.public_metrics || {};
-
-          const views =
-            metrics.impression_count ||
-            0;
-
-          const engagements =
-            (metrics.like_count || 0) +
-            (metrics.retweet_count ||
-              0) +
-            (metrics.reply_count ||
-              0) +
-            (metrics.quote_count ||
-              0) +
-            (metrics.bookmark_count ||
-              0);
-
-          return total + views + engagements;
-        },
-        0
-      );
-
-    return {
-      trending:
-        count >=
-        TREND_THRESHOLD.twitter,
-
-      count,
-    };
-  } catch {
-    return {
-      trending: false,
-
-      count: 0,
-    };
-  }
-}
-
-/**
- * REDDIT TREND CHECK
- * --------------------------------
- * Uses Reddit public search API.
- * Reddit does not expose post views publicly,
- * so count is the real visible activity:
- * score + comments.
- */
-async function checkRedditTrend(
-  query: string
-): Promise<PlatformResult> {
-  try {
-    const url = `https://www.reddit.com/search.json?q=${encodeURIComponent(
-      query
-    )}&sort=top&t=day&limit=10`;
-
-    const response = await fetch(
-      url,
-      {
-        headers: {
-          'User-Agent':
-            'NotifierBot/1.0',
-        },
-
-        cache: 'no-store',
-      }
-    );
-
-    if (!response.ok) {
-      return {
-        trending: false,
-
-        count: 0,
-      };
-    }
-
-    const data =
-      await response.json();
-
-    const posts =
-      data?.data?.children || [];
-
-    if (!posts.length) {
-      return {
-        trending: false,
-
-        count: 0,
-      };
-    }
-
-    let score = 0;
-
-    let comments = 0;
-
-    for (const post of posts) {
-      score +=
-        post?.data?.score || 0;
-
-      comments +=
-        post?.data
-          ?.num_comments || 0;
-    }
-
-    const total =
-      score + comments;
-
-    return {
-      trending:
-        total >=
-        TREND_THRESHOLD.reddit,
-
-      count: total,
-    };
-  } catch {
-    return {
-      trending: false,
-
-      count: 0,
-    };
-  }
-}
-
-/**
- * HACKER NEWS TREND CHECK
- * --------------------------------
- * Uses the public Hacker News Algolia search API.
- * Searches for stories posted in the last 48 hours that match
- * the article query. Count = sum of (points + comments) across hits.
- * No API key required.
- *
- * Replaces the previous Google Trends dailytrends endpoint which
- * started returning 404 and is no longer functional from this server.
- */
-async function checkHackerNewsTrend(
-  query: string
-): Promise<PlatformResult> {
-  try {
-    const since48h = Math.floor(Date.now() / 1000) - 48 * 60 * 60;
-
-    const url = `https://hn.algolia.com/api/v1/search?query=${encodeURIComponent(
-      query
-    )}&tags=story&numericFilters=created_at_i%3E${since48h}&hitsPerPage=20`;
-
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'NotifireBot/1.0',
-      },
-
-      cache: 'no-store',
-    });
-
-    if (!response.ok) {
-      return {
-        trending: false,
-
-        count: 0,
-      };
+      return { isTrending: false, trendSignals: EMPTY_TREND_SIGNALS };
     }
 
     const data = await response.json();
+    const text: string | undefined = data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
-    const hits: Array<{
-      points?: number;
-      num_comments?: number;
-    }> = data?.hits || [];
-
-    if (!hits.length) {
-      return {
-        trending: false,
-
-        count: 0,
-      };
+    if (!text) {
+      return { isTrending: false, trendSignals: EMPTY_TREND_SIGNALS };
     }
 
-    const count = hits.reduce(
-      (total, hit) =>
-        total + (hit.points || 0) + (hit.num_comments || 0),
-      0
-    );
+    const signals: GeminiTrendSignals = JSON.parse(text);
 
-    return {
-      trending: count >= TREND_THRESHOLD.hackernews,
+    const isTrending =
+      (signals.twitter?.tweet_count || 0) >= 50 ||
+      (signals.reddit?.reddit_post_count || 0) >= 5 ||
+      (signals.google?.google_trend_score || 0) >= 30;
 
-      count,
-    };
+    return { isTrending, trendSignals: signals };
   } catch {
-    return {
-      trending: false,
-
-      count: 0,
-    };
+    return { isTrending: false, trendSignals: EMPTY_TREND_SIGNALS };
   }
 }
-

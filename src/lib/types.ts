@@ -1,6 +1,28 @@
 // lib/types.ts
 export type Category = 'ai' | 'cybersecurity' | 'cloud' | 'databases' | 'infrastructure' | 'devops' | 'startup';
 
+export interface GeminiTrendSignals {
+  twitter: {
+    tweet_count: number;
+    retweet_count: number;
+    hashtags: string[];
+    mention_count: number;
+  };
+  reddit: {
+    reddit_post_count: number;
+    reddit_comment_count: number;
+    reddit_upvote_count: number;
+    reddit_engagement: number;
+    subreddits: string[];
+  };
+  google: {
+    google_trend_score: number;
+    google_search_frequency_delta: number;
+    related_queries: string[];
+  };
+  reasoning?: string;
+}
+
 export const ALL_CATEGORIES: Category[] = ['ai', 'cybersecurity', 'cloud', 'databases', 'infrastructure', 'devops', 'startup'];
 
 export const CATEGORY_META: Record<Category, { label: string; emoji: string; color: string }> = {
@@ -33,9 +55,7 @@ export interface Article {
   officialSource?: boolean;
   isTrending?: boolean;
 
-trendingOn?: string[];
-
-trendingCount?: number;
+trendSignals?: GeminiTrendSignals;
 
 authorized?: boolean;
 
@@ -77,7 +97,7 @@ export interface TrendSignal {
 
 // ── Social Trend Types (for frontend) ───────────────────────────────
 
-export type SocialPlatform = 'twitter' | 'reddit' | 'hackernews';
+export type SocialPlatform = 'twitter' | 'reddit' | 'google';
 
 export interface SocialTrendTopic {
   topic: string;

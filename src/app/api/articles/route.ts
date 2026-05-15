@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { Article, Category } from '@/lib/types';
+import { Article, Category, GeminiTrendSignals } from '@/lib/types';
 
 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
 
@@ -36,8 +36,7 @@ export async function GET(request: NextRequest) {
       summary: a.summary ?? undefined,
       keyPoints: JSON.parse(a.keyPoints || '[]'),
       isTrending: a.isTrending,
-      trendingOn: JSON.parse(a.trendingOn || '[]'),
-      trendingCount: a.trendingCount,
+      trendSignals: JSON.parse(a.trendSignals || '{}') as GeminiTrendSignals,
       authorized: a.authorized,
       officialSourceName: a.officialSourceName ?? undefined,
       officialSourceUrl: a.officialSourceUrl ?? undefined,

@@ -310,45 +310,97 @@ export function ArticleModal({ article, open, onOpenChange }: ArticleModalProps)
                 )}
               </div>
 
-              {/* Row: Trending */}
-              {article.isTrending && (
-                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 text-xs">
-                  <span className="flex items-center gap-1.5">
-                    <Flame className="size-3.5 shrink-0 text-orange-500" />
-                    <span className="text-foreground font-medium">Trending:</span>
-                    <Badge variant="secondary" className="text-[10px] gap-1 bg-orange-500/10 text-orange-500 border-0">
-                      Hot
-                    </Badge>
-                    {article.trendingCount != null && (
-                      <span className="text-muted-foreground">{article.trendingCount.toLocaleString()} signals</span>
-                    )}
-                  </span>
-                  {article.trendingOn && article.trendingOn.length > 0 && (
-                    <span className="flex items-center gap-1.5 text-muted-foreground flex-wrap">
-                      <TrendingUp className="size-3.5 shrink-0" />
-                      <span className="text-foreground font-medium">Trending on:</span>
-                      {article.trendingOn.map((p) => (
-                        <Badge key={p} variant="secondary" className="text-[10px] capitalize">{p}</Badge>
-                      ))}
-                    </span>
-                  )}
-                </div>
-              )}
+              {/* Row: Trending — Gemini platform-wise breakdown */}
+              {article.isTrending && article.trendSignals && (
+                <div className="px-4 py-3 space-y-3 text-xs border-b border-border/10">
+                  <div className="flex items-center gap-1.5 font-medium">
+                    <Flame className="size-3.5 text-orange-500 shrink-0" />
+                    <span className="text-foreground">Trending Signals</span>
+                    <Badge variant="secondary" className="text-[10px] bg-orange-500/10 text-orange-500 border-0 ml-1">Hot</Badge>
+                  </div>
 
-              {/* Row: Social boost */}
-              {article.socialBoost != null && article.socialBoost > 0 && (
-                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 text-xs">
-                  <span className="flex items-center gap-1.5 text-muted-foreground">
-                    <Radio className="size-3.5 shrink-0 text-cyan-500" />
-                    <span className="text-foreground font-medium">Social boost:</span>
-                    +{article.socialBoost}
-                  </span>
-                  {article.socialPlatforms && article.socialPlatforms.length > 0 && (
-                    <span className="flex items-center gap-1.5 text-muted-foreground flex-wrap">
-                      {article.socialPlatforms.map((p) => (
-                        <Badge key={p} variant="secondary" className="text-[10px] capitalize">{p}</Badge>
-                      ))}
-                    </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {/* Twitter/X */}
+                    <div className="p-2.5 rounded-lg bg-[#1da1f2]/5 border border-[#1da1f2]/20">
+                      <div className="font-semibold text-[#1da1f2] mb-2">Twitter / X</div>
+                      <div className="space-y-1 text-muted-foreground">
+                        <div className="flex justify-between">
+                          <span>Tweets</span>
+                          <span className="font-mono text-foreground">{(article.trendSignals.twitter?.tweet_count || 0).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Retweets</span>
+                          <span className="font-mono text-foreground">{(article.trendSignals.twitter?.retweet_count || 0).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Mentions</span>
+                          <span className="font-mono text-foreground">{(article.trendSignals.twitter?.mention_count || 0).toLocaleString()}</span>
+                        </div>
+                        {(article.trendSignals.twitter?.hashtags || []).length > 0 && (
+                          <div className="flex flex-wrap gap-1 pt-1">
+                            {article.trendSignals.twitter.hashtags.slice(0, 4).map((tag) => (
+                              <Badge key={tag} variant="secondary" className="text-[9px] px-1 py-0 h-4">#{tag}</Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Reddit */}
+                    <div className="p-2.5 rounded-lg bg-[#ff4500]/5 border border-[#ff4500]/20">
+                      <div className="font-semibold text-[#ff4500] mb-2">Reddit</div>
+                      <div className="space-y-1 text-muted-foreground">
+                        <div className="flex justify-between">
+                          <span>Posts</span>
+                          <span className="font-mono text-foreground">{(article.trendSignals.reddit?.reddit_post_count || 0).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Comments</span>
+                          <span className="font-mono text-foreground">{(article.trendSignals.reddit?.reddit_comment_count || 0).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Upvotes</span>
+                          <span className="font-mono text-foreground">{(article.trendSignals.reddit?.reddit_upvote_count || 0).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Engagement</span>
+                          <span className="font-mono text-foreground">{(article.trendSignals.reddit?.reddit_engagement || 0).toLocaleString()}</span>
+                        </div>
+                        {(article.trendSignals.reddit?.subreddits || []).length > 0 && (
+                          <div className="flex flex-wrap gap-1 pt-1">
+                            {article.trendSignals.reddit.subreddits.slice(0, 3).map((sub) => (
+                              <Badge key={sub} variant="secondary" className="text-[9px] px-1 py-0 h-4">r/{sub}</Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Google */}
+                    <div className="p-2.5 rounded-lg bg-[#4285f4]/5 border border-[#4285f4]/20">
+                      <div className="font-semibold text-[#4285f4] mb-2">Google</div>
+                      <div className="space-y-1 text-muted-foreground">
+                        <div className="flex justify-between">
+                          <span>Trend Score</span>
+                          <span className="font-mono text-foreground">{article.trendSignals.google?.google_trend_score || 0}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Search Delta</span>
+                          <span className="font-mono text-foreground">+{(article.trendSignals.google?.google_search_frequency_delta || 0).toFixed(1)}%</span>
+                        </div>
+                        {(article.trendSignals.google?.related_queries || []).length > 0 && (
+                          <div className="flex flex-wrap gap-1 pt-1">
+                            {article.trendSignals.google.related_queries.slice(0, 3).map((q) => (
+                              <Badge key={q} variant="secondary" className="text-[9px] px-1 py-0 h-4">{q}</Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {article.trendSignals.reasoning && (
+                    <p className="text-muted-foreground italic text-[11px]">{article.trendSignals.reasoning}</p>
                   )}
                 </div>
               )}

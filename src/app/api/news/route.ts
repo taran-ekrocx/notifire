@@ -162,8 +162,7 @@ export async function GET(
           .filter(
             (a) =>
               a.isTrending &&
-              (a.trendingCount ||
-                0) > 30000
+              (a.trendSignals?.google?.google_trend_score || 0) > 60
           )
           .slice(0, 5);
 
@@ -406,15 +405,11 @@ async function persistArticles(
               article.isTrending ||
               false,
 
-            trendingOn:
+            trendSignals:
               JSON.stringify(
-                article.trendingOn ||
-                  []
+                article.trendSignals ||
+                  {}
               ),
-
-            trendingCount:
-              article.trendingCount ||
-              0,
 
             // AUTHORIZATION
             authorized:
@@ -463,15 +458,11 @@ async function persistArticles(
               article.isTrending ||
               false,
 
-            trendingOn:
+            trendSignals:
               JSON.stringify(
-                article.trendingOn ||
-                  []
+                article.trendSignals ||
+                  {}
               ),
-
-            trendingCount:
-              article.trendingCount ||
-              0,
 
             // AUTHORIZATION
             authorized:

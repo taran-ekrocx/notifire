@@ -19,9 +19,20 @@ interface ArticleCardProps {
   index: number;
 }
 
+function getActivePlatforms(article: Article): string[] {
+  const s = article.trendSignals;
+  if (!s) return [];
+  const out: string[] = [];
+  if ((s.twitter?.tweet_count || 0) > 0) out.push('Twitter');
+  if ((s.reddit?.reddit_post_count || 0) > 0) out.push('Reddit');
+  if ((s.google?.google_trend_score || 0) > 0) out.push('Google');
+  return out;
+}
+
 export function ArticleCard({ article, isSaved, onSave, onClick, index }: ArticleCardProps) {
   const meta = CATEGORY_META[article.category];
   const displayImage = article.aiImageUrl || article.imageUrl;
+  const activePlatforms = getActivePlatforms(article);
 
   return (
     <motion.div
@@ -80,21 +91,18 @@ export function ArticleCard({ article, isSaved, onSave, onClick, index }: Articl
     <div className="text-[10px] font-semibold uppercase tracking-wide">
       Trending
     </div>
-
-    <div className="mt-1 flex flex-wrap gap-1">
-      {article.trendingOn?.map((platform) => (
-        <span
-          key={platform}
-          className="rounded bg-white/20 px-1.5 py-0.5 text-[9px]"
-        >
-          {platform}
-        </span>
-      ))}
-    </div>
-
-    <div className="mt-1 text-[9px] text-white/80">
-      {(article.trendingCount || 0).toLocaleString()} discussions
-    </div>
+    {activePlatforms.length > 0 && (
+      <div className="mt-1 flex flex-wrap gap-1">
+        {activePlatforms.map((platform) => (
+          <span
+            key={platform}
+            className="rounded bg-white/20 px-1.5 py-0.5 text-[9px]"
+          >
+            {platform}
+          </span>
+        ))}
+      </div>
+    )}
   </div>
 )}
           </div>
@@ -119,9 +127,9 @@ export function ArticleCard({ article, isSaved, onSave, onClick, index }: Articl
                     <span className="text-xs">{meta.emoji}</span>
                     {meta.label}
                   </Badge>
-                  {article.isTrending && (
+                  {article.isTrending && activePlatforms.length > 0 && (
   <div className="flex flex-wrap items-center gap-1">
-    {article.trendingOn?.map((platform) => (
+    {activePlatforms.map((platform) => (
       <Badge
         key={platform}
         variant="secondary"
@@ -130,10 +138,6 @@ export function ArticleCard({ article, isSaved, onSave, onClick, index }: Articl
         {platform}
       </Badge>
     ))}
-
-    <span className="text-[10px] text-muted-foreground">
-      {(article.trendingCount || 0).toLocaleString()} discussions
-    </span>
   </div>
 )}
                 </div>

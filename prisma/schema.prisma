@@ -48,12 +48,8 @@ model Article {
 
   isTrending            Boolean @default(false)
 
-  // JSON string:
-  // ["Google","Twitter/X","Reddit"]
-  trendingOn            String  @default("[]")
-
-  // total discussions / mentions
-  trendingCount         Int     @default(0)
+  // JSON string: Gemini platform-wise trending metrics
+  trendSignals          String  @default("{}")
 
   // verified from original source?
   authorized            Boolean @default(false)

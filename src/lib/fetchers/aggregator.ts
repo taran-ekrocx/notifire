@@ -15,7 +15,7 @@ import { RSS_SOURCES } from '../config/rss-sources';
 
 import { deduplicate } from '../processors/deduplicator';
 
-import { detectTrendSignals } from './trendSignals';
+import { detectTrendSignals, EMPTY_TREND_SIGNALS } from './trendSignals';
 
 export async function fetchAllSources(
   categoryParam: string,
@@ -79,9 +79,11 @@ export async function fetchAllSources(
                   description:
                     article.description,
 
-                  tags:
-                    article.tags ||
-                    [],
+                  category:
+                    article.category,
+
+                  publishedAt:
+                    article.publishedAt,
                 }
               );
 
@@ -96,6 +98,11 @@ export async function fetchAllSources(
                 article.url
               );
 
+            const activePlatforms: SocialPlatform[] = [];
+            if ((trendSignals.trendSignals.twitter?.tweet_count || 0) > 0) activePlatforms.push('twitter');
+            if ((trendSignals.trendSignals.reddit?.reddit_post_count || 0) > 0) activePlatforms.push('reddit');
+            if ((trendSignals.trendSignals.google?.google_trend_score || 0) > 0) activePlatforms.push('google');
+
             return {
               ...article,
 
@@ -103,20 +110,14 @@ export async function fetchAllSources(
               isTrending:
                 trendSignals.isTrending,
 
-              trendingOn:
-                trendSignals.trendingOn,
-
-              trendingCount:
-                trendSignals.trendingCount,
+              trendSignals:
+                trendSignals.trendSignals,
 
               socialBoost:
-                trendSignals.trendingCount,
+                trendSignals.trendSignals.google?.google_trend_score || 0,
 
               socialPlatforms:
-                trendSignals.trendingOn as SocialPlatform[],
-
-              totalMentions:
-                trendSignals.trendingCount,
+                activePlatforms,
 
               // AUTHORIZATION
               authorized:
@@ -148,10 +149,8 @@ export async function fetchAllSources(
         )
         .sort(
           (a, b) =>
-            (b.trendingCount ||
-              0) -
-            (a.trendingCount ||
-              0)
+            (b.trendSignals?.google?.google_trend_score || 0) -
+            (a.trendSignals?.google?.google_trend_score || 0)
         );
     }
 
@@ -193,15 +192,11 @@ export async function fetchAllSources(
             // TRENDING
             isTrending: false,
 
-            trendingOn: [],
-
-            trendingCount: 0,
+            trendSignals: EMPTY_TREND_SIGNALS,
 
             socialBoost: 0,
 
             socialPlatforms: [],
-
-            totalMentions: 0,
 
             // AUTHORIZATION
             authorized:
