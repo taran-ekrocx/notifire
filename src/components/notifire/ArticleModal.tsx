@@ -1,45 +1,29 @@
 'use client';
 
-import { Article, ArticleDetail, CATEGORY_META } from '@/lib/types';
+import { Article, CATEGORY_META } from '@/lib/types';
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   ExternalLink,
   Clock,
-  Copy,
-  Check,
-  Download,
   Sparkles,
-  Bookmark,
-  ThumbsUp,
-  ThumbsDown,
-  Minus,
-  Tag,
-  Share2,
   Loader2,
-  ImagePlus,
   Flame,
-  Shield,
-  Radio,
-  FileText,
   CalendarDays,
   User,
   Globe,
-  TrendingUp,
   RefreshCw,
+  FileText,
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { formatTimeAgo } from '@/lib/time-utils';
 import Image from 'next/image';
 
@@ -50,594 +34,407 @@ interface ArticleModalProps {
 }
 
 export function ArticleModal({ article, open, onOpenChange }: ArticleModalProps) {
-  const [detail, setDetail] = useState<ArticleDetail | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [scrapeLoading, setScrapeLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
   const [scrapeContent, setScrapeContent] = useState<string | null>(null);
-  const [copiedField, setCopiedField] = useState<string | null>(null);
-  const [imageGenerating, setImageGenerating] = useState(false);
+  const [scrapeLoading, setScrapeLoading] = useState(false);
   const [aiImageUrl, setAiImageUrl] = useState<string | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
 
   useEffect(() => {
     if (!article || !open) {
-      setDetail(null);
-      setError(null);
       setScrapeContent(null);
       setAiImageUrl(null);
+      setActiveTab('overview');
       return;
     }
-
     setAiImageUrl(article.aiImageUrl || null);
-
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-
-    fetch('/api/detail', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: article.title,
-        url: article.url,
-        description: article.description,
-        source: article.source,
-      }),
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed to fetch detail');
-        return res.json();
-      })
-      .then((data) => {
-        if (!cancelled) {
-          setDetail(data);
-          setLoading(false);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setError(err.message || 'Failed to load article detail');
-          setLoading(false);
-        }
-      });
-
-    return () => { cancelled = true; };
   }, [article, open]);
 
-  const handleScrape = useCallback(async () => {
-    if (!article) return;
+  const loadContent = useCallback(async () => {
+    if (!article || scrapeContent || scrapeLoading) return;
     setScrapeLoading(true);
     try {
       const res = await fetch('/api/scrape', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: article.url, summarize: true }),
+        body: JSON.stringify({ url: article.url }),
       });
       if (!res.ok) throw new Error('Scrape failed');
       const data = await res.json();
       setScrapeContent(data.content || null);
-      if (data.summary) setDetail(data.summary);
     } catch {
       // silently fail
     } finally {
       setScrapeLoading(false);
     }
-  }, [article]);
+  }, [article, scrapeContent, scrapeLoading]);
 
-  const handleGenerateImage = useCallback(async () => {
+  const handleTabChange = useCallback((tab: string) => {
+    setActiveTab(tab);
+    if (tab === 'content') loadContent();
+  }, [loadContent]);
+
+  const handleRegenerateContent = useCallback(async () => {
     if (!article) return;
-    setImageGenerating(true);
+    setRegenerating(true);
     try {
-      const res = await fetch('/api/generate-image', {
+      const res = await fetch('/api/regenerate-content', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           articleId: article.id,
+          url: article.url,
           title: article.title,
           description: article.description,
           category: article.category,
           tags: article.tags,
-          url: article.url,
         }),
       });
-      if (!res.ok) throw new Error('Image generation failed');
+      if (!res.ok) throw new Error('Regeneration failed');
       const data = await res.json();
+      if (data.content) setScrapeContent(data.content);
       if (data.imageUrl) setAiImageUrl(data.imageUrl);
     } catch {
       // silently fail
     } finally {
-      setImageGenerating(false);
+      setRegenerating(false);
     }
   }, [article]);
-
-  const handleCopy = useCallback(async (text: string, field: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedField(field);
-      setTimeout(() => setCopiedField(null), 2000);
-    } catch {
-      // fallback
-    }
-  }, []);
 
   if (!article) return null;
 
   const meta = CATEGORY_META[article.category];
   const displayImage = aiImageUrl || article.aiImageUrl || article.imageUrl;
-
-  const sentimentConfig = {
-    positive: { icon: ThumbsUp,   label: 'Positive', color: 'text-green-500',          bg: 'bg-green-500/10 border-green-500/30' },
-    neutral:  { icon: Minus,      label: 'Neutral',  color: 'text-muted-foreground',    bg: 'bg-secondary border-secondary' },
-    negative: { icon: ThumbsDown, label: 'Negative', color: 'text-red-500',             bg: 'bg-red-500/10 border-red-500/30' },
-  };
-
-  const sentiment = detail?.sentiment || article.sentiment || 'neutral';
-  const sentimentInfo = sentimentConfig[sentiment];
-  const SentimentIcon = sentimentInfo.icon;
-
-  // Determine what content to show: freshly scraped > pre-stored on article
   const fullContent = scrapeContent || article.content || null;
+
+  const trendingPlatforms: string[] = [];
+  if (article.isTrending && article.trendSignals) {
+    if ((article.trendSignals.twitter?.tweet_count || 0) >= 50) trendingPlatforms.push('Twitter / X');
+    if ((article.trendSignals.reddit?.reddit_post_count || 0) >= 5) trendingPlatforms.push('Reddit');
+    if ((article.trendSignals.google?.google_trend_score || 0) >= 30) trendingPlatforms.push('Google');
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] p-0 gap-0 overflow-hidden">
-        {/* Category colour accent */}
-        <div className="h-1.5 w-full" style={{ backgroundColor: meta.color }} />
+      <DialogContent className="!top-0 !left-0 !translate-x-0 !translate-y-0 !w-screen !h-screen !max-w-none !rounded-none !border-0 !p-0 !gap-0 overflow-hidden">
+        <DialogTitle className="sr-only">{article.title}</DialogTitle>
 
-        <ScrollArea className="max-h-[calc(90vh-6px)]">
-          <div className="p-6 space-y-5">
+        {/* Category colour bar */}
+        <div className="h-1 w-full shrink-0" style={{ backgroundColor: meta.color }} />
 
-            {/* ── Header ── */}
-            <DialogHeader className="space-y-3">
-              <div className="flex items-center gap-2 flex-wrap">
-                <Badge
-                  variant="secondary"
-                  className="text-xs font-semibold gap-1 border-0"
-                  style={{ backgroundColor: `${meta.color}20`, color: meta.color }}
-                >
-                  <span>{meta.emoji}</span>
-                  {meta.label}
-                </Badge>
-                <span className="text-xs text-muted-foreground font-medium">{article.source}</span>
-                {article.author && (
-                  <>
-                    <span className="text-border text-xs">·</span>
-                    <span className="text-xs text-muted-foreground">{article.author}</span>
-                  </>
-                )}
-                <span className="text-border text-xs">·</span>
-                <span className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Clock className="size-3" />
-                  {formatTimeAgo(article.publishedAt)}
-                </span>
-              </div>
+        <Tabs
+          value={activeTab}
+          onValueChange={handleTabChange}
+          className="flex flex-col gap-0"
+          style={{ height: 'calc(100vh - 4px)' }}
+        >
+          {/* Sticky tab header */}
+          <div className="flex items-center gap-4 px-6 py-3 border-b border-border/50 bg-background shrink-0">
+            <Badge
+              variant="secondary"
+              className="text-xs font-semibold gap-1 border-0 shrink-0"
+              style={{ backgroundColor: `${meta.color}20`, color: meta.color }}
+            >
+              {meta.emoji} {meta.label}
+            </Badge>
+            <span className="text-sm font-semibold truncate flex-1 min-w-0">{article.title}</span>
+            <TabsList className="shrink-0">
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="content">Content</TabsTrigger>
+            </TabsList>
+          </div>
 
-              <DialogTitle className="text-lg leading-snug">{article.title}</DialogTitle>
-              <DialogDescription className="text-sm leading-relaxed">{article.description}</DialogDescription>
-            </DialogHeader>
+          {/* ── Overview Tab ── */}
+          <TabsContent
+            value="overview"
+            className="flex-1 overflow-y-auto outline-none m-0"
+          >
+            <div className="p-6 max-w-4xl mx-auto space-y-6 pb-12">
 
-            {/* ── Image ── */}
-            {displayImage ? (
-              <div className="space-y-2">
-                <div className="relative w-full h-48 rounded-lg overflow-hidden border border-border/30">
-                  <Image
-                    src={displayImage}
-                    alt={`Illustration for: ${article.title}`}
-                    fill
-                    className="object-cover"
-                    sizes="(max-width: 672px) 100vw, 672px"
-                    priority
-                  />
-                  {(aiImageUrl || article.aiImageUrl) && (
-                    <div className="absolute top-2 right-2">
-                      <Badge variant="secondary" className="text-[10px] font-semibold gap-1 border-0 bg-black/60 text-white backdrop-blur-sm">
-                        <Sparkles className="size-3" /> AI Generated
+                {/* Title & Description */}
+                <div className="space-y-3">
+                  <h1 className="text-2xl font-bold leading-snug">{article.title}</h1>
+                  <p className="text-muted-foreground leading-relaxed">{article.description}</p>
+                </div>
+
+                {/* Metadata block */}
+                <div className="rounded-lg border border-border/50 bg-muted/30 divide-y divide-border/40">
+                  <div className="flex flex-wrap gap-x-8 gap-y-3 px-5 py-4 text-sm">
+                    <span className="flex items-center gap-2 text-muted-foreground">
+                      <CalendarDays className="size-4 shrink-0" />
+                      <span className="text-foreground font-medium">Published:</span>
+                      {new Date(article.publishedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                    </span>
+                    <span className="flex items-center gap-2 text-muted-foreground">
+                      <Clock className="size-4 shrink-0" />
+                      <span className="text-foreground font-medium">Published:</span>
+                      {formatTimeAgo(article.publishedAt)}
+                    </span>
+                    {article.source && (
+                      <span className="flex items-center gap-2 text-muted-foreground">
+                        <Globe className="size-4 shrink-0" />
+                        <span className="text-foreground font-medium">Source:</span>
+                        {article.source}
+                      </span>
+                    )}
+                    {article.author && (
+                      <span className="flex items-center gap-2 text-muted-foreground">
+                        <User className="size-4 shrink-0" />
+                        <span className="text-foreground font-medium">Author:</span>
+                        {article.author}
+                      </span>
+                    )}
+                    {article.readTimeMin && (
+                      <span className="flex items-center gap-2 text-muted-foreground">
+                        <Clock className="size-4 shrink-0" />
+                        <span className="text-foreground font-medium">Read time:</span>
+                        {article.readTimeMin} min
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Trending On */}
+                {article.isTrending ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2">
+                      <Flame className="size-4 text-orange-500" />
+                      <span className="text-sm font-semibold">Trending On</span>
+                      <Badge variant="secondary" className="text-[10px] bg-orange-500/10 text-orange-500 border-0">
+                        Hot
                       </Badge>
                     </div>
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
-                </div>
-                <Button
-                  variant="ghost" size="sm"
-                  className="gap-1.5 text-xs text-muted-foreground"
-                  onClick={handleGenerateImage}
-                  disabled={imageGenerating}
-                >
-                  {imageGenerating
-                    ? <><Loader2 className="size-3 animate-spin" /> Regenerating...</>
-                    : <><Sparkles className="size-3" /> Regenerate Image</>}
-                </Button>
-              </div>
-            ) : (
-              <Button
-                variant="outline" size="sm"
-                className="gap-1.5 w-full border-dashed"
-                onClick={handleGenerateImage}
-                disabled={imageGenerating}
-              >
-                {imageGenerating
-                  ? <><Loader2 className="size-3.5 animate-spin" /> Generating AI Illustration...</>
-                  : <><ImagePlus className="size-3.5" /> Generate AI Illustration</>}
-              </Button>
-            )}
 
-            {/* ── Key Article Data ── */}
-            <div className="rounded-lg border border-border/50 bg-muted/30 divide-y divide-border/40">
+                    {trendingPlatforms.length > 0 && (
+                      <div className="flex gap-2 flex-wrap">
+                        {trendingPlatforms.map((p) => (
+                          <Badge key={p} variant="secondary" className="text-xs">{p}</Badge>
+                        ))}
+                      </div>
+                    )}
 
-              {/* Row: Published / Author */}
-              <div className="flex flex-wrap gap-x-6 gap-y-2 px-4 py-3 text-xs">
-                <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <CalendarDays className="size-3.5 shrink-0" />
-                  <span className="text-foreground font-medium">Published:</span>
-                  {new Date(article.publishedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
-                </span>
-                {article.author && (
-                  <span className="flex items-center gap-1.5 text-muted-foreground">
-                    <User className="size-3.5 shrink-0" />
-                    <span className="text-foreground font-medium">Author:</span>
-                    {article.author}
-                  </span>
-                )}
-                {article.source && (
-                  <span className="flex items-center gap-1.5 text-muted-foreground">
-                    <Globe className="size-3.5 shrink-0" />
-                    <span className="text-foreground font-medium">Source:</span>
-                    {article.source}
-                  </span>
-                )}
-              </div>
+                    {/* Platform-wise signals */}
+                    {article.trendSignals && (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {/* Twitter/X */}
+                        <div className="p-4 rounded-lg bg-[#1da1f2]/5 border border-[#1da1f2]/20 space-y-2">
+                          <div className="font-semibold text-[#1da1f2] text-sm">Twitter / X</div>
+                          <div className="space-y-1.5 text-xs text-muted-foreground">
+                            <div className="flex justify-between">
+                              <span>Tweets</span>
+                              <span className="font-mono text-foreground">
+                                {(article.trendSignals.twitter?.tweet_count || 0).toLocaleString()}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Retweets</span>
+                              <span className="font-mono text-foreground">
+                                {(article.trendSignals.twitter?.retweet_count || 0).toLocaleString()}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Mentions</span>
+                              <span className="font-mono text-foreground">
+                                {(article.trendSignals.twitter?.mention_count || 0).toLocaleString()}
+                              </span>
+                            </div>
+                            {(article.trendSignals.twitter?.hashtags || []).length > 0 && (
+                              <div className="flex flex-wrap gap-1 pt-1">
+                                {article.trendSignals.twitter.hashtags.slice(0, 4).map((tag) => (
+                                  <Badge key={tag} variant="secondary" className="text-[9px] px-1 py-0 h-4">
+                                    #{tag}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
 
-              {/* Row: Read time / Sentiment / Scraped */}
-              <div className="flex flex-wrap gap-x-6 gap-y-2 px-4 py-3 text-xs">
-                {article.readTimeMin && (
-                  <span className="flex items-center gap-1.5 text-muted-foreground">
-                    <Clock className="size-3.5 shrink-0" />
-                    <span className="text-foreground font-medium">Read time:</span>
-                    {article.readTimeMin} min
-                  </span>
-                )}
-                <span className="flex items-center gap-1.5">
-                  <SentimentIcon className={`size-3.5 shrink-0 ${sentimentInfo.color}`} />
-                  <span className="text-foreground font-medium">Sentiment:</span>
-                  <span className={sentimentInfo.color}>{sentimentInfo.label}</span>
-                </span>
-                {article.scrapedAt && (
-                  <span className="flex items-center gap-1.5 text-muted-foreground">
-                    <Download className="size-3.5 shrink-0" />
-                    <span className="text-foreground font-medium">Scraped:</span>
-                    {formatTimeAgo(article.scrapedAt)}
-                  </span>
-                )}
-              </div>
+                        {/* Reddit */}
+                        <div className="p-4 rounded-lg bg-[#ff4500]/5 border border-[#ff4500]/20 space-y-2">
+                          <div className="font-semibold text-[#ff4500] text-sm">Reddit</div>
+                          <div className="space-y-1.5 text-xs text-muted-foreground">
+                            <div className="flex justify-between">
+                              <span>Posts</span>
+                              <span className="font-mono text-foreground">
+                                {(article.trendSignals.reddit?.reddit_post_count || 0).toLocaleString()}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Comments</span>
+                              <span className="font-mono text-foreground">
+                                {(article.trendSignals.reddit?.reddit_comment_count || 0).toLocaleString()}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Upvotes</span>
+                              <span className="font-mono text-foreground">
+                                {(article.trendSignals.reddit?.reddit_upvote_count || 0).toLocaleString()}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Engagement</span>
+                              <span className="font-mono text-foreground">
+                                {(article.trendSignals.reddit?.reddit_engagement || 0).toLocaleString()}
+                              </span>
+                            </div>
+                            {(article.trendSignals.reddit?.subreddits || []).length > 0 && (
+                              <div className="flex flex-wrap gap-1 pt-1">
+                                {article.trendSignals.reddit.subreddits.slice(0, 3).map((sub) => (
+                                  <Badge key={sub} variant="secondary" className="text-[9px] px-1 py-0 h-4">
+                                    r/{sub}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
 
-              {/* Row: Trending — Gemini platform-wise breakdown */}
-              {article.isTrending && article.trendSignals && (
-                <div className="px-4 py-3 space-y-3 text-xs border-b border-border/10">
-                  <div className="flex items-center gap-1.5 font-medium">
-                    <Flame className="size-3.5 text-orange-500 shrink-0" />
-                    <span className="text-foreground">Trending Signals</span>
-                    <Badge variant="secondary" className="text-[10px] bg-orange-500/10 text-orange-500 border-0 ml-1">Hot</Badge>
+                        {/* Google */}
+                        <div className="p-4 rounded-lg bg-[#4285f4]/5 border border-[#4285f4]/20 space-y-2">
+                          <div className="font-semibold text-[#4285f4] text-sm">Google</div>
+                          <div className="space-y-1.5 text-xs text-muted-foreground">
+                            <div className="flex justify-between">
+                              <span>Trend Score</span>
+                              <span className="font-mono text-foreground">
+                                {article.trendSignals.google?.google_trend_score || 0}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Search Delta</span>
+                              <span className="font-mono text-foreground">
+                                +{(article.trendSignals.google?.google_search_frequency_delta || 0).toFixed(1)}%
+                              </span>
+                            </div>
+                            {(article.trendSignals.google?.related_queries || []).length > 0 && (
+                              <div className="flex flex-wrap gap-1 pt-1">
+                                {article.trendSignals.google.related_queries.slice(0, 3).map((q) => (
+                                  <Badge key={q} variant="secondary" className="text-[9px] px-1 py-0 h-4">
+                                    {q}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {article.trendSignals?.reasoning && (
+                      <p className="text-xs text-muted-foreground italic">{article.trendSignals.reasoning}</p>
+                    )}
                   </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    {/* Twitter/X */}
-                    <div className="p-2.5 rounded-lg bg-[#1da1f2]/5 border border-[#1da1f2]/20">
-                      <div className="font-semibold text-[#1da1f2] mb-2">Twitter / X</div>
-                      <div className="space-y-1 text-muted-foreground">
-                        <div className="flex justify-between">
-                          <span>Tweets</span>
-                          <span className="font-mono text-foreground">{(article.trendSignals.twitter?.tweet_count || 0).toLocaleString()}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Retweets</span>
-                          <span className="font-mono text-foreground">{(article.trendSignals.twitter?.retweet_count || 0).toLocaleString()}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Mentions</span>
-                          <span className="font-mono text-foreground">{(article.trendSignals.twitter?.mention_count || 0).toLocaleString()}</span>
-                        </div>
-                        {(article.trendSignals.twitter?.hashtags || []).length > 0 && (
-                          <div className="flex flex-wrap gap-1 pt-1">
-                            {article.trendSignals.twitter.hashtags.slice(0, 4).map((tag) => (
-                              <Badge key={tag} variant="secondary" className="text-[9px] px-1 py-0 h-4">#{tag}</Badge>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Reddit */}
-                    <div className="p-2.5 rounded-lg bg-[#ff4500]/5 border border-[#ff4500]/20">
-                      <div className="font-semibold text-[#ff4500] mb-2">Reddit</div>
-                      <div className="space-y-1 text-muted-foreground">
-                        <div className="flex justify-between">
-                          <span>Posts</span>
-                          <span className="font-mono text-foreground">{(article.trendSignals.reddit?.reddit_post_count || 0).toLocaleString()}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Comments</span>
-                          <span className="font-mono text-foreground">{(article.trendSignals.reddit?.reddit_comment_count || 0).toLocaleString()}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Upvotes</span>
-                          <span className="font-mono text-foreground">{(article.trendSignals.reddit?.reddit_upvote_count || 0).toLocaleString()}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Engagement</span>
-                          <span className="font-mono text-foreground">{(article.trendSignals.reddit?.reddit_engagement || 0).toLocaleString()}</span>
-                        </div>
-                        {(article.trendSignals.reddit?.subreddits || []).length > 0 && (
-                          <div className="flex flex-wrap gap-1 pt-1">
-                            {article.trendSignals.reddit.subreddits.slice(0, 3).map((sub) => (
-                              <Badge key={sub} variant="secondary" className="text-[9px] px-1 py-0 h-4">r/{sub}</Badge>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Google */}
-                    <div className="p-2.5 rounded-lg bg-[#4285f4]/5 border border-[#4285f4]/20">
-                      <div className="font-semibold text-[#4285f4] mb-2">Google</div>
-                      <div className="space-y-1 text-muted-foreground">
-                        <div className="flex justify-between">
-                          <span>Trend Score</span>
-                          <span className="font-mono text-foreground">{article.trendSignals.google?.google_trend_score || 0}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Search Delta</span>
-                          <span className="font-mono text-foreground">+{(article.trendSignals.google?.google_search_frequency_delta || 0).toFixed(1)}%</span>
-                        </div>
-                        {(article.trendSignals.google?.related_queries || []).length > 0 && (
-                          <div className="flex flex-wrap gap-1 pt-1">
-                            {article.trendSignals.google.related_queries.slice(0, 3).map((q) => (
-                              <Badge key={q} variant="secondary" className="text-[9px] px-1 py-0 h-4">{q}</Badge>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Flame className="size-4 opacity-40" />
+                    <span>Not currently trending on any platform.</span>
                   </div>
+                )}
 
-                  {article.trendSignals.reasoning && (
-                    <p className="text-muted-foreground italic text-[11px]">{article.trendSignals.reasoning}</p>
-                  )}
-                </div>
-              )}
+            </div>
+          </TabsContent>
 
-              {/* Row: Official source */}
-              {(article.authorized || article.officialSourceName) && (
-                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 text-xs">
-                  <span className="flex items-center gap-1.5">
-                    <Shield className="size-3.5 shrink-0 text-emerald-500" />
-                    <span className="text-foreground font-medium">Official source:</span>
-                    {article.officialSourceName ? (
-                      article.officialSourceUrl ? (
-                        <a
-                          href={article.officialSourceUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-emerald-500 underline underline-offset-2"
+          {/* ── Content Tab ── */}
+          <TabsContent
+            value="content"
+            className="flex-1 overflow-y-auto outline-none m-0"
+          >
+            <div className="p-6 max-w-4xl mx-auto space-y-6 pb-12">
+
+                {/* Title */}
+                <h1 className="text-2xl font-bold leading-snug">{article.title}</h1>
+
+                {/* Image */}
+                {displayImage && (
+                  <div className="relative w-full h-72 rounded-xl overflow-hidden border border-border/30">
+                    <Image
+                      src={displayImage}
+                      alt={`Illustration for: ${article.title}`}
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 896px) 100vw, 896px"
+                      priority
+                    />
+                    {(aiImageUrl || article.aiImageUrl) && (
+                      <div className="absolute top-2 right-2">
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px] font-semibold gap-1 border-0 bg-black/60 text-white backdrop-blur-sm"
                         >
-                          {article.officialSourceName}
-                        </a>
-                      ) : (
-                        <span className="text-emerald-500">{article.officialSourceName}</span>
-                      )
-                    ) : (
-                      <Badge variant="secondary" className="text-[10px] bg-emerald-500/10 text-emerald-500 border-0">Verified</Badge>
+                          <Sparkles className="size-3" /> AI Generated
+                        </Badge>
+                      </div>
                     )}
-                  </span>
-                </div>
-              )}
-
-              {/* Row: Tags */}
-              {article.tags && article.tags.length > 0 && (
-                <div className="flex flex-wrap items-start gap-2 px-4 py-3">
-                  <span className="flex items-center gap-1.5 text-xs text-foreground font-medium shrink-0">
-                    <Tag className="size-3.5" /> Tags:
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {article.tags.map((tag) => (
-                      <Badge key={tag} variant="secondary" className="text-[10px] px-2 py-0.5">{tag}</Badge>
-                    ))}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
                   </div>
-                </div>
-              )}
-            </div>
+                )}
 
-            {/* ── Full Scraped Content ── */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <FileText className="size-4 text-emerald-500" />
-                  <h4 className="text-sm font-semibold">Full Article Content</h4>
-                </div>
-                <Button
-                  variant="outline" size="sm"
-                  className="h-7 text-xs gap-1"
-                  onClick={handleScrape}
-                  disabled={scrapeLoading}
-                >
-                  {scrapeLoading
-                    ? <><Loader2 className="size-3 animate-spin" /> Scraping...</>
-                    : fullContent
-                      ? <><RefreshCw className="size-3" /> Re-scrape</>
-                      : <><Download className="size-3" /> Scrape Content</>}
-                </Button>
-              </div>
-
-              {fullContent ? (
-                <div className="bg-muted/50 rounded-lg p-4 text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                  {fullContent}
-                </div>
-              ) : (
-                <div className="bg-muted/30 rounded-lg p-4 flex flex-col items-center justify-center gap-2 min-h-[80px] border border-dashed border-border/50">
-                  <p className="text-xs text-muted-foreground text-center">
-                    No scraped content yet. Click &quot;Scrape Content&quot; to fetch the full article text.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <Separator />
-
-            {/* ── AI Analysis ── */}
-            {loading && (
-              <div className="space-y-4 py-2">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="size-4 animate-spin" />
-                  <span>AI is analysing this article…</span>
-                </div>
-                <div className="space-y-3">
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-5/6" />
-                  <Skeleton className="h-4 w-4/6" />
-                  <div className="mt-4 space-y-2">
-                    <Skeleton className="h-3 w-full" />
-                    <Skeleton className="h-3 w-full" />
-                    <Skeleton className="h-3 w-3/4" />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {error && !loading && (
-              <div className="py-4 text-center">
-                <p className="text-sm text-destructive mb-1">{error}</p>
-                <p className="text-xs text-muted-foreground">AI analysis unavailable. You can still read the article or scrape its content.</p>
-              </div>
-            )}
-
-            {detail && !loading && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-                className="space-y-5"
-              >
-                {/* AI Summary */}
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Sparkles className="size-4 text-violet-500" />
-                    <h4 className="text-sm font-semibold">AI Summary</h4>
-                  </div>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{detail.fullSummary}</p>
-                </div>
-
-                {/* Key Points */}
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Bookmark className="size-4 text-amber-500" />
-                    <h4 className="text-sm font-semibold">Key Points</h4>
-                  </div>
-                  <ul className="space-y-1.5">
-                    {(detail.keyPoints || []).length > 0 ? (
-                      detail.keyPoints.map((point, i) => (
-                        <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
-                          <span className="size-1.5 rounded-full bg-primary/60 mt-1.5 shrink-0" />
-                          {point}
-                        </li>
-                      ))
-                    ) : (
-                      <li className="text-sm text-muted-foreground">No key points available.</li>
-                    )}
-                  </ul>
-                </div>
-
-                {/* Read time + Sentiment */}
+                {/* Action buttons */}
                 <div className="flex items-center gap-3 flex-wrap">
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Clock className="size-3.5" />
-                    <span>{detail.readTimeMinutes} min read</span>
-                  </div>
-                  <Badge
-                    variant="outline"
-                    className={`text-[11px] gap-1 ${sentimentInfo.bg} ${sentimentInfo.color} border-0`}
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => window.open(article.url, '_blank', 'noopener,noreferrer')}
                   >
-                    <SentimentIcon className="size-3" />
-                    {sentimentInfo.label}
-                  </Badge>
+                    <ExternalLink className="size-3.5" />
+                    Read Full Article
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={handleRegenerateContent}
+                    disabled={regenerating}
+                  >
+                    {regenerating ? (
+                      <><Loader2 className="size-3.5 animate-spin" /> Regenerating...</>
+                    ) : (
+                      <><RefreshCw className="size-3.5" /> Regenerate Content</>
+                    )}
+                  </Button>
                 </div>
 
-                {/* Related Topics */}
-                {detail.relatedTopics && detail.relatedTopics.length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <Tag className="size-4 text-cyan-500" />
-                      <h4 className="text-sm font-semibold">Related Topics</h4>
-                    </div>
-                    <div className="flex gap-2 flex-wrap">
-                      {detail.relatedTopics.map((topic) => (
-                        <Badge key={topic} variant="secondary" className="text-xs">{topic}</Badge>
-                      ))}
-                    </div>
+                {/* Article Content */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <FileText className="size-4 text-emerald-500" />
+                    <h4 className="text-sm font-semibold">Article Content</h4>
                   </div>
-                )}
 
-                {/* LinkedIn Draft */}
-                {detail.linkedinDraft && (
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <Share2 className="size-4 text-blue-500" />
-                        <h4 className="text-sm font-semibold">LinkedIn Draft</h4>
-                      </div>
-                      <Button
-                        variant="ghost" size="sm" className="h-7 text-xs gap-1"
-                        onClick={() => handleCopy(detail.linkedinDraft!, 'linkedin')}
-                      >
-                        {copiedField === 'linkedin'
-                          ? <><Check className="size-3 text-green-500" /> Copied!</>
-                          : <><Copy className="size-3" /> Copy</>}
-                      </Button>
+                  {scrapeLoading && (
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-5/6" />
+                      <Skeleton className="h-4 w-4/6" />
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-3/4" />
                     </div>
-                    <div className="bg-muted/50 rounded-lg p-3 text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap font-mono">
-                      {detail.linkedinDraft}
-                    </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Email Draft */}
-                {detail.emailDraft && (
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <Share2 className="size-4 text-green-500" />
-                        <h4 className="text-sm font-semibold">Email Draft</h4>
-                      </div>
-                      <Button
-                        variant="ghost" size="sm" className="h-7 text-xs gap-1"
-                        onClick={() => handleCopy(detail.emailDraft!, 'email')}
-                      >
-                        {copiedField === 'email'
-                          ? <><Check className="size-3 text-green-500" /> Copied!</>
-                          : <><Copy className="size-3" /> Copy</>}
-                      </Button>
-                    </div>
-                    <div className="bg-muted/50 rounded-lg p-3 text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap font-mono">
-                      {detail.emailDraft}
-                    </div>
-                  </div>
-                )}
-              </motion.div>
-            )}
+                  {!scrapeLoading && fullContent && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.3 }}
+                      className="bg-muted/50 rounded-lg p-5 text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap"
+                    >
+                      {fullContent}
+                    </motion.div>
+                  )}
 
-            <Separator />
+                  {!scrapeLoading && !fullContent && (
+                    <div className="bg-muted/30 rounded-lg p-8 flex flex-col items-center justify-center gap-3 border border-dashed border-border/50 min-h-[120px]">
+                      <p className="text-xs text-muted-foreground text-center">
+                        Could not load article content. Try &quot;Regenerate Content&quot; to fetch and enhance it with Gemini AI.
+                      </p>
+                    </div>
+                  )}
+                </div>
 
-            {/* ── Action bar ── */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <Button
-                variant="default" size="sm" className="gap-1.5"
-                onClick={() => window.open(article.url, '_blank', 'noopener,noreferrer')}
-              >
-                <ExternalLink className="size-3.5" />
-                Read Full Article
-              </Button>
             </div>
-
-          </div>
-        </ScrollArea>
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );
