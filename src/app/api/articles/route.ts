@@ -7,14 +7,28 @@ const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const category = searchParams.get('category') || 'all';
+  const startDateParam = searchParams.get('startDate');
+  const endDateParam = searchParams.get('endDate');
+
+  // Resolve date range: use explicit params when provided, else default to last 24h
+  const defaultCutoff = new Date(Date.now() - TWENTY_FOUR_HOURS);
+  const startDate = startDateParam ? new Date(startDateParam) : defaultCutoff;
+  // End of supplied end-date day (23:59:59.999) or now
+  let endDate: Date | undefined;
+  if (endDateParam) {
+    endDate = new Date(endDateParam);
+    endDate.setHours(23, 59, 59, 999);
+  }
 
   try {
     const db = await getDb();
-    const cutoff = new Date(Date.now() - TWENTY_FOUR_HOURS);
 
     const articles = await db.article.findMany({
       where: {
-        publishedAt: { gte: cutoff },
+        publishedAt: {
+          gte: isNaN(startDate.getTime()) ? defaultCutoff : startDate,
+          ...(endDate && !isNaN(endDate.getTime()) ? { lte: endDate } : {}),
+        },
         ...(category !== 'all' ? { category } : {}),
         // Exclude stub entries (e.g. HN "Comments") with no meaningful description
         NOT: { description: { in: [''] } },

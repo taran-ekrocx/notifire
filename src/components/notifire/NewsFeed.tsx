@@ -28,12 +28,17 @@ import {
   BookOpen,
   Download,
   Settings,
+  CalendarRange,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 
 type SourceTab = 'rss' | 'ailive' | 'trending' | 'saved' | 'docs' | 'settings';
 
 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+
+function toDateInputValue(d: Date): string {
+  return d.toISOString().slice(0, 10); // YYYY-MM-DD
+}
 
 interface NewsFeedState {
   articles: Article[];
@@ -56,6 +61,9 @@ export function NewsFeed() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const today = toDateInputValue(new Date());
+  const [startDate, setStartDate] = useState(today);
+  const [endDate, setEndDate] = useState(today);
 
   const [state, setState] = useState<NewsFeedState>({
     articles: [],
@@ -79,7 +87,7 @@ export function NewsFeed() {
     }
   }, []);
 
-  // Load articles from DB (used on page load, tab changes, and category changes)
+  // Load articles from DB (used on page load, tab changes, category changes, and date changes)
   const fetchArticles = useCallback(async () => {
     if (activeTab === 'docs' || activeTab === 'settings') return;
 
@@ -90,7 +98,10 @@ export function NewsFeed() {
 
       if (activeTab === 'rss' || activeTab === 'ailive') {
         const categoryParam = activeCategory === 'all' ? 'all' : activeCategory;
-        const res = await fetch(`/api/articles?category=${categoryParam}`);
+        const params = new URLSearchParams({ category: categoryParam });
+        if (startDate) params.set('startDate', startDate);
+        if (endDate) params.set('endDate', endDate);
+        const res = await fetch(`/api/articles?${params.toString()}`);
         if (!res.ok) throw new Error('Failed to load articles from database');
         const data = await res.json();
         articles = data.articles || [];
@@ -109,9 +120,9 @@ export function NewsFeed() {
         articles = data.articles || [];
       }
 
-      // 24h safety filter (DB route already filters, kept for trending/saved)
+      // Client-side cutoff only for trending/saved (rss/ailive use server date filter)
       const cutoff = Date.now() - TWENTY_FOUR_HOURS;
-      const recentArticles = activeTab === 'saved'
+      const recentArticles = (activeTab === 'saved' || activeTab === 'rss' || activeTab === 'ailive')
         ? articles
         : articles.filter(a => {
             const pubTime = new Date(a.publishedAt).getTime();
@@ -132,7 +143,7 @@ export function NewsFeed() {
         error: err instanceof Error ? err.message : 'Failed to load articles',
       }));
     }
-  }, [activeTab, activeCategory]);
+  }, [activeTab, activeCategory, startDate, endDate]);
 
   useEffect(() => {
     setMounted(true);
@@ -300,6 +311,45 @@ export function NewsFeed() {
             <SearchBar query={searchQuery} onQueryChange={setSearchQuery} />
           </div>
         </div>
+
+        {/* Date Range Filter — rss / ailive tabs only */}
+        {(activeTab === 'rss' || activeTab === 'ailive') && (
+          <div className="flex items-center gap-2 flex-wrap text-sm">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <CalendarRange className="size-3.5" />
+              <span className="text-xs font-medium">Date range</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={startDate}
+                max={endDate || today}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="h-7 rounded-md border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                aria-label="Start date"
+              />
+              <span className="text-muted-foreground text-xs">to</span>
+              <input
+                type="date"
+                value={endDate}
+                min={startDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="h-7 rounded-md border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                aria-label="End date"
+              />
+            </div>
+            {(startDate !== today || endDate !== today) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs px-2 text-muted-foreground"
+                onClick={() => { setStartDate(today); setEndDate(today); }}
+              >
+                Reset to today
+              </Button>
+            )}
+          </div>
+        )}
 
         {/* Source Tabs */}
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as SourceTab)}>
