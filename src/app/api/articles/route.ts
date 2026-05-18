@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { Article, Category, GeminiTrendSignals } from '@/lib/types';
 
+export const dynamic = 'force-dynamic';
+
 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
 
 export async function GET(request: NextRequest) {
@@ -30,8 +32,14 @@ export async function GET(request: NextRequest) {
           ...(endDate && !isNaN(endDate.getTime()) ? { lte: endDate } : {}),
         },
         ...(category !== 'all' ? { category } : {}),
-        // Exclude stub entries (e.g. HN "Comments") with no meaningful description
-        NOT: { description: { in: [''] } },
+        // Require non-empty title, description, and url
+        NOT: {
+          OR: [
+            { title: '' },
+            { description: '' },
+            { url: '' },
+          ],
+        },
       },
       orderBy: { publishedAt: 'desc' },
     });

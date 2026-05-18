@@ -476,25 +476,36 @@ export function ArticleModal({ article, open, onOpenChange }: ArticleModalProps)
           >
             <div className="p-6 max-w-4xl mx-auto space-y-6 pb-12">
 
-                {/* Tab switcher — above title */}
+                {/* Tab switcher + Read Full Article + Regenerate Content — above title */}
                 <div className="flex items-center justify-between gap-4">
                   <TabsList>
                     <TabsTrigger value="rss-data">RSS Data</TabsTrigger>
                     <TabsTrigger value="scraped-data">Scraped Data</TabsTrigger>
                   </TabsList>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5 shrink-0"
-                    onClick={handleRegenerateContent}
-                    disabled={regenerating}
-                  >
-                    {regenerating ? (
-                      <><Loader2 className="size-3.5 animate-spin" /> Regenerating...</>
-                    ) : (
-                      <><RefreshCw className="size-3.5" /> Regenerate Content</>
-                    )}
-                  </Button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="gap-1.5"
+                      onClick={() => window.open(article.url, '_blank', 'noopener,noreferrer')}
+                    >
+                      <ExternalLink className="size-3.5" />
+                      Read Full Article
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5"
+                      onClick={handleRegenerateContent}
+                      disabled={regenerating}
+                    >
+                      {regenerating ? (
+                        <><Loader2 className="size-3.5 animate-spin" /> Regenerating...</>
+                      ) : (
+                        <><RefreshCw className="size-3.5" /> Regenerate Content</>
+                      )}
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Title */}

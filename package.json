@@ -67,6 +67,7 @@
     "openai": "^6.37.0",
     "pg": "^8.20.0",
     "pglite-prisma-adapter": "^0.7.2",
+    "playwright": "^1.60.0",
     "prisma": "^6.19.3",
     "react": "^19.0.0",
     "react-day-picker": "^9.8.0",

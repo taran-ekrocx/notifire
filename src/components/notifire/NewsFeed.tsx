@@ -90,7 +90,8 @@ export function NewsFeed() {
   }, []);
 
   // Load articles from DB (used on page load, tab changes, category changes, and date changes)
-  const fetchArticles = useCallback(async () => {
+  // skipDateFilter=true bypasses the date range so the full 24h window is visible (used by Refresh)
+  const fetchArticles = useCallback(async (skipDateFilter?: boolean) => {
     if (activeTab === 'settings') return;
 
     setState((prev) => ({ ...prev, loading: true, error: null }));
@@ -101,9 +102,15 @@ export function NewsFeed() {
       if (activeTab === 'rss' || activeTab === 'ailive') {
         const categoryParam = activeCategory === 'all' ? 'all' : activeCategory;
         const params = new URLSearchParams({ category: categoryParam });
-        if (startDate) params.set('startDate', startDate);
-        if (endDate) params.set('endDate', endDate);
-        const res = await fetch(`/api/articles?${params.toString()}`);
+        // Only apply the date filter when the user has explicitly chosen a custom range.
+        // When both dates are the default "today" we skip params so the API uses its 24h window,
+        // which avoids cutting off articles published before UTC midnight.
+        const isDefaultRange = startDate === today && endDate === today;
+        if (!skipDateFilter && !isDefaultRange) {
+          if (startDate) params.set('startDate', startDate);
+          if (endDate) params.set('endDate', endDate);
+        }
+        const res = await fetch(`/api/articles?${params.toString()}`, { cache: 'no-store' });
         if (!res.ok) throw new Error('Failed to load articles from database');
         const data = await res.json();
         articles = data.articles || [];
@@ -115,7 +122,7 @@ export function NewsFeed() {
           setAvailableCategories(cats);
         }
       } else if (activeTab === 'trending') {
-        const res = await fetch('/api/trending');
+        const res = await fetch('/api/trending', { cache: 'no-store' });
         if (!res.ok) throw new Error('Failed to fetch trending');
         const data = await res.json();
         articles = data.articles || [];
@@ -123,7 +130,7 @@ export function NewsFeed() {
           setState(prev => ({ ...prev, socialTrends: data.socialTrends }));
         }
       } else if (activeTab === 'saved') {
-        const res = await fetch('/api/saved');
+        const res = await fetch('/api/saved', { cache: 'no-store' });
         if (!res.ok) throw new Error('Failed to fetch saved');
         const data = await res.json();
         articles = data.articles || [];
@@ -213,16 +220,17 @@ export function NewsFeed() {
     setModalOpen(true);
   }, []);
 
-  // Refresh: trigger RSS fetch for all categories, then reload from DB
+  // Refresh: trigger RSS fetch for all categories, then reload from DB without date filter
+  // so that all articles fetched in the last 24h are visible regardless of UTC midnight boundary
   const handleRefresh = useCallback(async () => {
     if (activeTab === 'settings') return;
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
-      await fetch('/api/news?category=all&refresh=true&withImages=true');
+      await fetch('/api/news?category=all&refresh=true&withImages=true', { cache: 'no-store' });
     } catch {
       // best-effort — reload from DB regardless
     }
-    await fetchArticles();
+    await fetchArticles(true);
   }, [activeTab, fetchArticles]);
 
   const filteredArticles = state.articles.filter((article) => {

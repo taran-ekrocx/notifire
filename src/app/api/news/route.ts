@@ -20,7 +20,7 @@ import { generateArticleImage } from '@/lib/fetchers/imageGenerator';
 
 import { scrapeArticle } from '@/lib/fetchers/scrapeArticle';
 
-export const revalidate = 300;
+export const dynamic = 'force-dynamic';
 
 const TWENTY_FOUR_HOURS =
   24 * 60 * 60 * 1000;
@@ -218,8 +218,7 @@ export async function GET(
         headers: {
           'X-Cache': 'MISS',
 
-          'Cache-Control':
-            'public, s-maxage=300, stale-while-revalidate=600',
+          'Cache-Control': 'no-store',
         },
       }
     );
